@@ -4,10 +4,43 @@ import torch.nn as nn
 from model_base import Model
 
 
-class Bottleneck(nn.Module):
+class BasicBlock(nn.Module):
+    expansion = 1 
+
+    def __init__(self, in_channels, out_channels, i_downsample=None, stride=1, dropout=0.1):
+        super(BasicBlock, self).__init__()
+
+        self.conv1 = nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=stride, padding=1)
+        self.batch_norm1 = nn.BatchNorm2d(out_channels)
+
+        self.conv2 = nn.Conv2d(out_channels, out_channels, kernel_size=3, stride=1, padding=1)
+        self.batch_norm2 = nn.BatchNorm2d(out_channels)
+
+        self.i_downsample = i_downsample
+        self.stride = stride
+        self.dropout = nn.Dropout(dropout)
+
+        self.a = nn.Parameter(torch.tensor(0.0))
+
+    def forward(self, x):
+        identity = x.clone()
+
+        x = torch.relu(self.batch_norm1(self.conv1(x)))
+        x = self.batch_norm2(self.conv2(x))
+
+        if self.i_downsample is not None:
+            identity = self.i_downsample(identity)
+
+        x += self.dropout(self.a * identity)
+        # x += identity
+        x = torch.relu(x)
+
+        return x
+    
+class BottleneckBlock(nn.Module):
     expansion = 4
     def __init__(self, in_channels, out_channels, i_downsample=None, stride=1, dropout=0.1):
-        super(Bottleneck, self).__init__()
+        super(BottleneckBlock, self).__init__()
         
         self.conv1 = nn.Conv2d(in_channels, out_channels, kernel_size=1, stride=1, padding=0)
         self.batch_norm1 = nn.BatchNorm2d(out_channels)
@@ -20,7 +53,7 @@ class Bottleneck(nn.Module):
         
         self.i_downsample = i_downsample
         self.stride = stride
-        # self.relu = nn.ReLU()
+
         self.a = nn.Parameter(torch.tensor(0.0))
         self.dropout = nn.Dropout(dropout)
 
@@ -33,21 +66,21 @@ class Bottleneck(nn.Module):
         x = self.conv3(x)
         x = self.batch_norm3(x)
         
-        #downsample if needed
+        # downsample if needed
         if self.i_downsample is not None:
             identity = self.i_downsample(identity)
-        #add identity
-        #x += self.dropout(self.a*identity)
-        x += identity
+        # add identity
+        x += self.dropout(self.a*identity)
+        # x += identity
         x = torch.relu(x)
         
         return x
 
     
 class ResNetArchitecture(nn.Module):
-    def __init__(self, num_class, layer_list, **param):
+    def __init__(self, num_class, layer_list, block=BottleneckBlock, **param):
         super(ResNetArchitecture, self).__init__()
-        ResBlock = Bottleneck
+        self.block = block
         self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
         # Generic parameters
@@ -63,13 +96,23 @@ class ResNetArchitecture(nn.Module):
         # self.relu = nn.ReLU()
         self.max_pool = nn.MaxPool2d(kernel_size = 3, stride=2, padding=1)
         
-        self.layer1 = self._make_layer(ResBlock, self.layer_list[0], planes=64)
-        self.layer2 = self._make_layer(ResBlock, self.layer_list[1], planes=128, stride=2)
-        self.layer3 = self._make_layer(ResBlock, self.layer_list[2], planes=256, stride=2)
-        self.layer4 = self._make_layer(ResBlock, self.layer_list[3], planes=512, stride=2)
+        # self.layer1 = self._make_layer(self.block, self.layer_list[0], planes=64)
+        # self.layer2 = self._make_layer(self.block, self.layer_list[1], planes=128, stride=2)
+        # self.layer3 = self._make_layer(self.block, self.layer_list[2], planes=256, stride=2)
+        # self.layer4 = self._make_layer(self.block, self.layer_list[3], planes=512, stride=2)
+        self.layers = nn.ModuleList()
+        planes = 64
+
+        for i, num_blocks in enumerate(self.layer_list):
+            stride = 1 if i == 0 else 2
+            layer = self._make_layer(self.block, num_blocks, planes, stride=stride)
+            self.layers.append(layer)
+            self.in_channels = planes * self.block.expansion
+            planes *= 2
+        final_planes = planes // 2
         
         self.avgpool = nn.AdaptiveAvgPool2d((1,1))
-        self.fc = nn.Linear(512*ResBlock.expansion, self.num_class)
+        self.fc = nn.Linear(final_planes*self.block.expansion, self.num_class)
 
         self.to(self.device)
 
@@ -95,10 +138,12 @@ class ResNetArchitecture(nn.Module):
         x = torch.relu(self.batch_norm1(self.conv1(x)))
         x = self.max_pool(x)
 
-        x = self.layer1(x)
-        x = self.layer2(x)
-        x = self.layer3(x)
-        x = self.layer4(x)
+        # x = self.layer1(x)
+        # x = self.layer2(x)
+        # x = self.layer3(x)
+        # x = self.layer4(x)
+        for layer in self.layers:
+            x = layer(x)
 
         x = self.avgpool(x)
 
@@ -107,35 +152,41 @@ class ResNetArchitecture(nn.Module):
         
         return x
         
-    def _make_layer(self, ResBlock, blocks, planes, stride=1):
+    def _make_layer(self, block, blocks, planes, stride=1):
         ii_downsample = None
         layers = []
         
-        if stride != 1 or self.in_channels != planes*ResBlock.expansion:
+        if stride != 1 or self.in_channels != planes*block.expansion:
             ii_downsample = nn.Sequential(
-                nn.Conv2d(self.in_channels, planes*ResBlock.expansion, kernel_size=1, stride=stride),
-                nn.BatchNorm2d(planes*ResBlock.expansion)
+                nn.Conv2d(self.in_channels, planes*block.expansion, kernel_size=1, stride=stride),
+                nn.BatchNorm2d(planes*block.expansion)
             )
             
-        layers.append(ResBlock(self.in_channels, planes, i_downsample=ii_downsample, stride=stride))
-        self.in_channels = planes*ResBlock.expansion
+        layers.append(block(self.in_channels, planes, i_downsample=ii_downsample, stride=stride))
+        self.in_channels = planes*block.expansion
         
         for i in range(blocks-1):
-            layers.append(ResBlock(self.in_channels, planes))
+            layers.append(block(self.in_channels, planes))
             
         return nn.Sequential(*layers)
     
 
 
 class ResNetModel(Model):
-    def __init__(self, num_class=100, layer_list=[3, 4, 6, 3], **kwargs):
+    def __init__(self, num_class=100, layer_list=[3, 4, 6, 3], block='Bottleneck', **kwargs):
         self.num_class = num_class
         self.layer_list = layer_list
+        if block == 'Bottleneck':
+            self.block = BottleneckBlock
+        else:
+            self.block = BasicBlock
         super().__init__(**kwargs)
 
     def build_model(self):
+        print(f"Building ResNet with {len(self.layer_list)} stages: {self.layer_list}")
         # Tu peux configurer les paramètres du ResNet ici
         return ResNetArchitecture(
             num_class=self.num_class,
-            layer_list=[3, 4, 6, 3],
+            layer_list=self.layer_list,
+            block=self.block
         )

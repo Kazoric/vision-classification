@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.optim as optim
 from abc import ABC, abstractmethod
 from tqdm import tqdm
+import matplotlib.pyplot as plt
 
 class Model(ABC):
     def __init__(self, device=None, lr=0.001):
@@ -10,6 +11,11 @@ class Model(ABC):
         self.model = self.build_model().to(self.device)
         self.criterion = nn.CrossEntropyLoss()
         self.optimizer = optim.Adam(self.model.parameters(), lr=lr)
+
+        self.train_loss = []
+        self.train_acc = []
+        self.valid_loss = []
+        self.valid_acc = []
 
     @abstractmethod
     def build_model(self):
@@ -40,23 +46,32 @@ class Model(ABC):
             acc = correct / total * 100
             print(f"Train Loss: {running_loss:.4f} | Train Acc: {acc:.2f}%")
 
+            self.train_loss.append(running_loss)
+            self.train_acc.append(acc)
+
             if val_loader:
                 self.evaluate(val_loader)
 
     def evaluate(self, data_loader):
         self.model.eval()
+        running_loss = 0.0
         correct = 0
         total = 0
         with torch.no_grad():
             for images, labels in data_loader:
                 images, labels = images.to(self.device), labels.to(self.device)
                 outputs = self.model(images)
+                loss = self.criterion(outputs, labels)
+                running_loss += loss.item()
                 _, predicted = torch.max(outputs, 1)
                 correct += (predicted == labels).sum().item()
                 total += labels.size(0)
 
         acc = correct / total * 100
-        print(f"Validation Accuracy: {acc:.2f}%")
+        print(f"Validation Loss: {running_loss:.4f} | Validation Accuracy: {acc:.2f}%")
+
+        self.valid_loss.append(running_loss)
+        self.valid_acc.append(acc)
 
     def predict(self, inputs):
         self.model.eval()
@@ -65,3 +80,20 @@ class Model(ABC):
             outputs = self.model(inputs)
             _, predicted = torch.max(outputs, 1)
         return predicted
+
+    def plot_acc_loss(self):
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(17, 5))
+
+        ax1.plot(self.train_acc)
+        ax1.plot(self.valid_acc)
+        ax1.set_title('model accuracy')
+        ax1.set_xlabel('epochs')
+        ax1.legend(['train accuracy', 'val accuracy'])
+
+        ax2.plot(self.train_loss)
+        ax2.plot(self.valid_loss)
+        ax2.set_title('model loss')
+        ax2.set_xlabel('epochs')
+        ax2.legend(['train loss', 'val loss'])
+
+        plt.show()
