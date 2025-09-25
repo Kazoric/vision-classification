@@ -7,8 +7,9 @@ import time
 from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms
 
-from dataloader import get_custom_cifar100_dataloaders, get_custom_stl10_dataloaders
+from data_loader import get_custom_cifar100_dataloaders, get_custom_stl10_dataloaders
 from resnet import ResNetModel
+from wide_resnet import WideResNetModel
 from vgg import VGGModel
 from mobilenet import MobileNetModel
 
@@ -31,12 +32,13 @@ train_loader, test_loader = get_custom_cifar100_dataloaders(
 #     batch_size=64
 # )
 
-model = ResNetModel(num_class=20, layer_list=[1,2,3,1], block='Bottleneck')
+# model = ResNetModel(num_class=20, layer_list=[1,2,3,1], block='Bottleneck')
+model = WideResNetModel(num_class=20, layer_list=[1,2,1], block='Bottleneck', widen_factor=2)
 # model = VGGModel(num_class=100, variant='VGG11')
 # model = MobileNetModel(num_class=100)
 
 training_start = time.time()
-model.train(train_loader, test_loader, epochs=50)
+model.train(train_loader, test_loader, epochs=200)
 training_stop = time.time()
 training_time = training_stop - training_start
 print(f"Training time: {training_time}")
