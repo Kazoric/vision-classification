@@ -1,4 +1,7 @@
 /__pycache__/
+*.py[codz]
+*$py.class
+
 /cifar-100-python/
 /stl10_binary/
 /plot_loss/

@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 
-from model_base import Model
+from models.model_base import Model
 
 
 class DepthwiseSeparableConv(nn.Module):
