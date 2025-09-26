@@ -174,6 +174,7 @@ class WideResNetArchitecture(nn.Module):
 
 class WideResNetModel(Model):
     def __init__(self, num_class=100, layer_list=[3, 4, 6, 3], block='Bottleneck', widen_factor=1, **kwargs):
+        self.name = 'wide_resnet'
         self.num_class = num_class
         self.layer_list = layer_list
         self.widen_factor = widen_factor

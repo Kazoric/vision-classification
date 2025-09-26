@@ -119,6 +119,7 @@ class DenseNetArchitecture(nn.Module):
 
 class DenseNetModel(Model):
     def __init__(self, num_class=100, block_config=[6, 12, 24, 16], growth_rate=32, compression=0.5, init_channels=64, dropout=0.1, **kwargs):
+        self.name = 'densenet'
         self.num_class = num_class
         self.block_config = block_config
         self.growth_rate = growth_rate

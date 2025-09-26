@@ -34,7 +34,7 @@ train_loader, test_loader = get_custom_cifar100_dataloaders(
 # )
 
 # model = ResNetModel(num_class=20, layer_list=[1,2,3,1], block='Bottleneck')
-model = WideResNetModel(num_class=20, layer_list=[1,2,1], block='Bottleneck', widen_factor=2)
+model = WideResNetModel(num_class=20, layer_list=[1,2,1], block='Bottleneck', widen_factor=2, save=True)
 # model = VGGModel(num_class=100, variant='VGG11')
 # model = MobileNetModel(num_class=100)
 # model = DenseNetModel(
@@ -44,8 +44,10 @@ model = WideResNetModel(num_class=20, layer_list=[1,2,1], block='Bottleneck', wi
 #     compression=0.5
 # )
 
+# model.load_checkpoint()
+
 training_start = time.time()
-model.train(train_loader, test_loader, epochs=50)
+model.train(train_loader, test_loader, epochs=5)
 training_stop = time.time()
 training_time = training_stop - training_start
 print(f"Training time: {training_time}")

@@ -94,6 +94,7 @@ class MobileNetArchitecture(nn.Module):
 
 class MobileNetModel(Model):
     def __init__(self, num_class=100, use_batchnorm=True, width_multiplier=1.0, **kwargs):
+        self.name = 'mobilenet'
         self.num_class = num_class
         self.width_multiplier = width_multiplier
         self.use_batchnorm = use_batchnorm

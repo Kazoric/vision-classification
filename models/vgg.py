@@ -77,6 +77,7 @@ class VGGArchitecture(nn.Module):
 
 class VGGModel(Model):
     def __init__(self, num_class=100, variant='VGG16', use_batchnorm=True, **kwargs):
+        self.name = 'vgg'
         self.num_class = num_class
         self.variant = variant
         self.use_batchnorm = use_batchnorm

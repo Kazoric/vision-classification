@@ -174,6 +174,7 @@ class ResNetArchitecture(nn.Module):
 
 class ResNetModel(Model):
     def __init__(self, num_class=100, layer_list=[3, 4, 6, 3], block='Bottleneck', **kwargs):
+        self.name = 'resnet'
         self.num_class = num_class
         self.layer_list = layer_list
         if block == 'Bottleneck':
