@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 
-from models.model_base import Model
+from core.model_base import Model
 
 
 class BasicBlock(nn.Module):
@@ -173,21 +173,20 @@ class ResNetArchitecture(nn.Module):
 
 
 class ResNetModel(Model):
-    def __init__(self, num_class=100, layer_list=[3, 4, 6, 3], block='Bottleneck', **kwargs):
+    def __init__(self, num_classes=100, layer_list=[3, 4, 6, 3], block='Bottleneck', **kwargs):
         self.name = 'resnet'
-        self.num_class = num_class
         self.layer_list = layer_list
         if block == 'Bottleneck':
             self.block = BottleneckBlock
         else:
             self.block = BasicBlock
-        super().__init__(**kwargs)
+        super().__init__(num_classes=num_classes, **kwargs)
 
     def build_model(self):
         print(f"Building ResNet with {len(self.layer_list)} stages: {self.layer_list}")
         # Tu peux configurer les paramètres du ResNet ici
         return ResNetArchitecture(
-            num_class=self.num_class,
+            num_class=self.num_classes,
             layer_list=self.layer_list,
             block=self.block
         )

@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 
-from models.model_base import Model
+from core.model_base import Model
 
 
 class BasicBlock(nn.Module):
@@ -173,22 +173,21 @@ class WideResNetArchitecture(nn.Module):
 
 
 class WideResNetModel(Model):
-    def __init__(self, num_class=100, layer_list=[3, 4, 6, 3], block='Bottleneck', widen_factor=1, **kwargs):
+    def __init__(self, num_classes=100, layer_list=[3, 4, 6, 3], block='Bottleneck', widen_factor=1, **kwargs):
         self.name = 'wide_resnet'
-        self.num_class = num_class
         self.layer_list = layer_list
         self.widen_factor = widen_factor
         if block == 'Bottleneck':
             self.block = BottleneckBlock
         else:
             self.block = BasicBlock
-        super().__init__(**kwargs)
+        super().__init__(num_classes=num_classes, **kwargs)
 
     def build_model(self):
         print(f"Building WideResNet with {len(self.layer_list)} stages: {self.layer_list} and widen factor {self.widen_factor}")
         # Tu peux configurer les paramètres du WideResNet ici
         return WideResNetArchitecture(
-            num_class=self.num_class,
+            num_class=self.num_classes,
             layer_list=self.layer_list,
             block=self.block,
             widen_factor=self.widen_factor

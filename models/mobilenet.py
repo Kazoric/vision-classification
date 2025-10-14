@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 
-from models.model_base import Model
+from core.model_base import Model
 
 
 class DepthwiseSeparableConv(nn.Module):
@@ -93,17 +93,16 @@ class MobileNetArchitecture(nn.Module):
 
 
 class MobileNetModel(Model):
-    def __init__(self, num_class=100, use_batchnorm=True, width_multiplier=1.0, **kwargs):
+    def __init__(self, num_classes=100, use_batchnorm=True, width_multiplier=1.0, **kwargs):
         self.name = 'mobilenet'
-        self.num_class = num_class
         self.width_multiplier = width_multiplier
         self.use_batchnorm = use_batchnorm
-        super().__init__(**kwargs)
+        super().__init__(num_classes=num_classes, **kwargs)
 
     def build_model(self):
         # Tu peux configurer les paramètres du MobileNet ici
         return MobileNetArchitecture(
-            num_class=self.num_class,
+            num_class=self.num_classes,
             width_multiplier=self.width_multiplier,
             use_batchnorm=self.use_batchnorm
         )

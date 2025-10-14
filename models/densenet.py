@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 
-from models.model_base import Model
+from core.model_base import Model
 
 
 class DenseLayer(nn.Module):
@@ -118,20 +118,19 @@ class DenseNetArchitecture(nn.Module):
 
 
 class DenseNetModel(Model):
-    def __init__(self, num_class=100, block_config=[6, 12, 24, 16], growth_rate=32, compression=0.5, init_channels=64, dropout=0.1, **kwargs):
+    def __init__(self, num_classes=100, block_config=[6, 12, 24, 16], growth_rate=32, compression=0.5, init_channels=64, dropout=0.1, **kwargs):
         self.name = 'densenet'
-        self.num_class = num_class
         self.block_config = block_config
         self.growth_rate = growth_rate
         self.compression = compression
         self.init_channels = init_channels
         self.dropout = dropout
-        super().__init__(**kwargs)
+        super().__init__(num_classes=num_classes, **kwargs)
 
     def build_model(self):
         print(f"Building DenseNet with block config: {self.block_config}, growth_rate: {self.growth_rate}")
         return DenseNetArchitecture(
-            num_class=self.num_class,
+            num_class=self.num_classes,
             block_config=self.block_config,
             growth_rate=self.growth_rate,
             compression=self.compression,

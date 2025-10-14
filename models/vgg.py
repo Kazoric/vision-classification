@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 
-from models.model_base import Model
+from core.model_base import Model
 
 
 class VGGArchitecture(nn.Module):
@@ -76,18 +76,17 @@ class VGGArchitecture(nn.Module):
 
 
 class VGGModel(Model):
-    def __init__(self, num_class=100, variant='VGG16', use_batchnorm=True, **kwargs):
+    def __init__(self, num_classes=100, variant='VGG16', use_batchnorm=True, **kwargs):
         self.name = 'vgg'
-        self.num_class = num_class
         self.variant = variant
         self.use_batchnorm = use_batchnorm
-        super().__init__(**kwargs)
+        super().__init__(num_classes=num_classes, **kwargs)
 
     def build_model(self):
         print(f"Building {self.variant}")
         # Tu peux configurer les paramètres du VGG ici
         return VGGArchitecture(
-            num_class=self.num_class,
+            num_class=self.num_classes,
             variant=self.variant,
             use_batchnorm=self.use_batchnorm
         )
