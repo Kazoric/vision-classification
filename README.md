@@ -12,10 +12,10 @@ This project provides a modular and extensible image classification framework us
 - Built-in support for metrics:
   - **Accuracy**, **F1 Score**, **Precision**, **Recall**
   - Implemented using **pure PyTorch** (no `sklearn`)
-- 🔁 Configurable schedulers and optimizers via `run.py`
-- 📦 Resume training from checkpoints automatically
-- 📊 Loss and metrics plotted after training
-- 🧱 Easily extensible to new models
+- Configurable schedulers and optimizers via `run.py`
+- Resume training from checkpoints automatically
+- Loss and metrics plotted after training
+- Easily extensible to new models
 
 ## 🧠 Supported Architectures
 
@@ -24,6 +24,7 @@ This project provides a modular and extensible image classification framework us
 - MobileNet
 - ResNet
 - Wide ResNet
+
 Each model file defines:
 - `Architecture`: the PyTorch `nn.Module` class
 - `Model`: a subclass of `ModelBase` that builds the architecture
