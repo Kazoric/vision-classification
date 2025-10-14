@@ -176,10 +176,13 @@ class ResNetModel(Model):
     def __init__(self, num_classes=100, layer_list=[3, 4, 6, 3], block='Bottleneck', **kwargs):
         self.name = 'resnet'
         self.layer_list = layer_list
+        self.block_str = block
         if block == 'Bottleneck':
             self.block = BottleneckBlock
-        else:
+        elif block == 'Basic':
             self.block = BasicBlock
+        else:
+            raise ValueError(f"Unknown block type: {block}")
         super().__init__(num_classes=num_classes, **kwargs)
 
     def build_model(self):
@@ -190,3 +193,10 @@ class ResNetModel(Model):
             layer_list=self.layer_list,
             block=self.block
         )
+    
+    def get_model_specific_params(self):
+        return {
+            "num_classes": self.num_classes,
+            "layer_list": self.layer_list,
+            "block": self.block_str
+        }

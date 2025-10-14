@@ -2,10 +2,9 @@
 
 import torch
 import os
-from datetime import datetime
 
 class CheckpointManager:
-    def __init__(self, model, optimizer, checkpoint_dir=None, model_name="model"):
+    def __init__(self, model, optimizer, run_id=None, model_name="model"):
         """
         model: nn.Module à sauvegarder
         optimizer: optimiseur à sauvegarder
@@ -18,9 +17,7 @@ class CheckpointManager:
         self.best_val_loss = float('inf')
         self.start_epoch = 0
 
-        if checkpoint_dir is None:
-            run_id = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-            checkpoint_dir = f"./checkpoints/{model_name}_{run_id}"
+        checkpoint_dir = f"./experiments/{run_id}/checkpoints"
         self.checkpoint_dir = checkpoint_dir
 
         os.makedirs(self.checkpoint_dir, exist_ok=True)

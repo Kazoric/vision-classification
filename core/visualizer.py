@@ -1,6 +1,7 @@
 # core/visualizer.py
 
 import matplotlib.pyplot as plt
+import os
 
 class Visualizer:
     def __init__(self):
@@ -69,7 +70,7 @@ class Visualizer:
     #     plt.show()
 
 
-    def plot_metrics(self, trainer):
+    def plot_metrics(self, trainer, run_id, save=True):
         epochs = range(1, len(trainer.train_loss) + 1)
 
         # Plot loss
@@ -100,5 +101,12 @@ class Visualizer:
             plt.legend()
             plt.grid(True)
             plt.tight_layout()
+
+            if save:
+                save_path = f"experiments/{run_id}/plots"
+                os.makedirs(save_path, exist_ok=True)
+                save_path = os.path.join(save_path, f'{metric_name}')
+                plt.savefig(save_path)
+                print(f"📊 Training curves saved to {save_path}")
         
         plt.show()

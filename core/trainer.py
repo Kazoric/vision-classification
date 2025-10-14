@@ -76,7 +76,7 @@ class Trainer:
                 metric_outputs[name] = score
 
             metrics_str = " | ".join(f"{name}: {value:.4f}" for name, value in metric_outputs.items())
-            print(f"{'Train':<7} | Loss: {running_loss:.4f} | {metrics_str}")
+            print(f"{'Train':<12} | Loss: {running_loss:.4f} | {metrics_str}")
 
             if val_loader:
                 val_loss = self.evaluate(val_loader)
@@ -123,6 +123,6 @@ class Trainer:
             metric_outputs[name] = score
 
         metrics_str = " | ".join(f"{name}: {value:.4f}" for name, value in metric_outputs.items())
-        print(f"{'Validation':<7} | Loss: {running_loss:.4f} | {metrics_str}")
+        print(f"{'Validation':<12} | Loss: {running_loss:.4f} | {metrics_str}")
 
         return running_loss
