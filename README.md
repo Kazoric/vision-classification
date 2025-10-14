@@ -1,38 +1,52 @@
 # Vision - Image Classification Module
 
-This project provides a Python module for image classification featuring various popular and custom models. It includes multiple architectures and a modular design with a shared base class.
+This project provides a modular and extensible image classification framework using PyTorch. It supports multiple popular architectures and separates core training logic into reusable components such as training, prediction, checkpointing, and visualization.
 
 ## 🚀 Features
 
-- Implementation of several image classification models:
-  - VGG
-  - DenseNet
-  - MobileNet
-  - ResNet
-  - Wide ResNet
-- A `Model` class in `model_base.py` that provides:
-  - Training
-  - Evaluation
-  - Checkpoint saving and loading
-  - Prediction
-  - Accuracy and loss plotting
-- Each model file defines:
-  - `Architecture`: the PyTorch model architecture class
-  - `Model`: the class declaring the model, including a `build_model` method to instantiate the architecture
-- Two `data_loader` classes to handle CIFAR10 and CIFAR100 dataset loading
-- Modular and extensible design to easily add new models or datasets
+- **Modular training pipeline** with clean separation of responsibilities:
+  - `Trainer`: handles training loop, validation, metrics, scheduler
+  - `CheckpointManager`: saves/loads checkpoints automatically
+  - `Predictor`: for single-batch or multi-batch inference
+  - `Visualizer`: for plotting loss and metrics over epochs
+- Built-in support for metrics:
+  - **Accuracy**, **F1 Score**, **Precision**, **Recall**
+  - Implemented using **pure PyTorch** (no `sklearn`)
+- 🔁 Configurable schedulers and optimizers via `run.py`
+- 📦 Resume training from checkpoints automatically
+- 📊 Loss and metrics plotted after training
+- 🧱 Easily extensible to new models
+
+## 🧠 Supported Architectures
+
+- VGG
+- DenseNet
+- MobileNet
+- ResNet
+- Wide ResNet
+Each model file defines:
+- `Architecture`: the PyTorch `nn.Module` class
+- `Model`: a subclass of `ModelBase` that builds the architecture
 
 ## 📂 Project Structure
 
 ```bash
 .
 ├── models/
-│   ├── model_base.py           # Contains the Model class (train, eval, checkpoint, predict, plot)
-│   ├── vgg.py                  # Defines VGGArchitecture and VGGModel
-│   ├── densenet.py             # Defines DenseNetArchitecture and DenseNetModel
-│   ├── mobilenet.py            # Defines MobileNetArchitecture and MobileNetModel
-│   ├── resnet.py               # Defines ResNetArchitecture and ResNetModel for ResNet
-│   └── wide_resnet.py          # Defines WideResNetArchitecture and WideResNetModel for Wide ResNet
-├── data_loader.py              # CIFAR100 and CIFAR10 data loader
-├── run.py                      # Script to execute training/evaluation
-└── README.md
+│   ├── resnet.py               # ResNetArchitecture and ResNetModel
+│   ├── vgg.py                  # VGGArchitecture and VGGModel
+│   ├── densenet.py             # DenseNetArchitecture and DenseNetModel
+│   ├── mobilenet.py            # MobileNetArchitecture and MobileNetModel
+│   └── wide_resnet.py          # WideResNetArchitecture and WideResNetModel
+│
+├── core/
+│   ├── model_base.py           # Base Model class (handles trainer, predictor, checkpoint)
+│   ├── trainer.py              # Trainer class (training loop, metrics, validation)
+│   ├── predictor.py            # Inference logic
+│   ├── checkpoint.py           # CheckpointManager (save/load checkpoints)
+│   ├── visualizer.py           # Visualization of loss and metrics
+│   └── metrics.py              # Torch implementations of F1, Precision, Recall, Accuracy
+│
+├── data_loader.py              # Loaders for CIFAR-10 and CIFAR-100
+├── run.py                      # Main script to launch training/evaluation
+└── README.md                   # This file
