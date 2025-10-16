@@ -12,6 +12,7 @@ import json
 from core.trainer import Trainer
 from core.predictor import Predictor
 from core.checkpoint import CheckpointManager
+from core.logger import TensorBoardLogger
 
 class Model(ABC):
     def __init__(self, device=None, 
@@ -24,7 +25,9 @@ class Model(ABC):
                  scheduler_cls=None,
                  scheduler_params=None,
                  metrics=None,
-                 num_classes=None):
+                 num_classes=None,
+                 use_logger=True, 
+                 log_dir="runs"):
         self.device = device or ('cuda' if torch.cuda.is_available() else 'cpu')
 
         if run_id is None:
@@ -65,6 +68,11 @@ class Model(ABC):
             model_name=model_name
         )
 
+        if use_logger:
+            self.logger = TensorBoardLogger(log_dir=log_dir, experiment_name=self.run_id)
+        else:
+            self.logger = None
+
         self.trainer = Trainer(
             model=self.model,
             optimizer=self.optimizer,
@@ -74,7 +82,8 @@ class Model(ABC):
             checkpoint_fn=self.checkpoint.save,
             scheduler=self.scheduler,
             metrics=metrics,
-            num_classes=self.num_classes
+            num_classes=self.num_classes,
+            logger=self.logger
         )
 
         self.predictor = Predictor(self.model, self.device)
@@ -131,3 +140,7 @@ class Model(ABC):
         Doit être redéfini dans la sous-classe pour retourner un dictionnaire.
         """
         raise NotImplementedError("Chaque modèle doit définir get_model_specific_params()")
+    
+    def close_logger(self):
+        if self.logger:
+            self.logger.close()

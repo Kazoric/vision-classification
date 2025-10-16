@@ -7,7 +7,7 @@ from tqdm import tqdm
 from core.metrics import METRICS
 
 class Trainer:
-    def __init__(self, model, optimizer, criterion, device, save=False, checkpoint_fn=None, scheduler=None, metrics=None, num_classes=None):
+    def __init__(self, model, optimizer, criterion, device, save=False, checkpoint_fn=None, scheduler=None, metrics=None, num_classes=None, logger=None):
         """
         model: le modèle PyTorch (nn.Module)
         optimizer: optimiseur (ex: Adam)
@@ -24,6 +24,7 @@ class Trainer:
         self.save_checkpoint = checkpoint_fn
         self.scheduler = scheduler
         self.num_classes = num_classes
+        self.logger = logger
 
         self.train_loss = []
         self.valid_loss = []
@@ -78,6 +79,11 @@ class Trainer:
             metrics_str = " | ".join(f"{name}: {value:.4f}" for name, value in metric_outputs.items())
             print(f"{'Train':<12} | Loss: {running_loss:.4f} | {metrics_str}")
 
+            if self.logger:
+                self.logger.log_scalar("Loss/train", running_loss, epoch)
+                self.logger.log_scalars("Metrics/train", metric_outputs, epoch)
+
+
             if val_loader:
                 val_loss = self.evaluate(val_loader)
 
@@ -124,5 +130,10 @@ class Trainer:
 
         metrics_str = " | ".join(f"{name}: {value:.4f}" for name, value in metric_outputs.items())
         print(f"{'Validation':<12} | Loss: {running_loss:.4f} | {metrics_str}")
+
+        if self.logger:
+            self.logger.log_scalar("Loss/val", running_loss, len(self.valid_loss) - 1)
+            self.logger.log_scalars("Metrics/val", metric_outputs, len(self.valid_loss) - 1)
+
 
         return running_loss

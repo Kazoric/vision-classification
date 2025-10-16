@@ -12,6 +12,25 @@ def unpickle(file):
         dict = pickle.load(fo, encoding='bytes')
     return dict
 
+def compute_mean_std(dataset):
+    loader = DataLoader(dataset, batch_size=64, shuffle=False, num_workers=0)
+
+    mean = 0.
+    std = 0.
+    nb_samples = 0.
+
+    for data, _ in loader:
+        batch_samples = data.size(0)
+        data = data.view(batch_samples, data.size(1), -1)  # (B, C, H*W)
+        mean += data.mean(2).sum(0)
+        std += data.std(2).sum(0)
+        nb_samples += batch_samples
+
+    mean /= nb_samples
+    std /= nb_samples
+
+    return mean, std
+
 class CIFAR100CustomDataset(Dataset):
     def __init__(self, data_path, train=True, transform=None):
         file = 'train' if train else 'test'

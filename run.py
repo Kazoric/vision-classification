@@ -3,10 +3,24 @@
 import torch
 from torch import optim
 from torch.optim.lr_scheduler import StepLR
+import argparse
+from threading import Thread
+from tensorboard import program
+import webbrowser
+import time
 
 from models.resnet import ResNetModel
 from data_loader import get_custom_cifar100_dataloaders, get_custom_stl10_dataloaders
 from core.visualizer import Visualizer
+
+def launch_tensorboard(log_dir="runs", port=6006):
+    tb = program.TensorBoard()
+    tb.configure(argv=[None, f"--logdir={log_dir}", f"--port={port}"])
+    url = tb.launch()
+    print(f"🔍 TensorBoard lancé à l'adresse : {url}")
+    # Optionnel : ouvre automatiquement dans le navigateur
+    time.sleep(2)
+    webbrowser.open(url)
 
 def main():
     # 🔧 Hyperparamètres
@@ -16,7 +30,7 @@ def main():
     learning_rate = 0.001
     scheduler = StepLR
     scheduler_params = {"step_size": 10, "gamma": 0.1}
-    num_epochs = 5
+    num_epochs = 10
     model_name = "resnet_cifar10"
     metrics=["F1", "Accuracy", "Precision", "Recall"]
     resume = False  # True pour charger un checkpoint s’il existe
@@ -43,6 +57,7 @@ def main():
 
     # 🚀 Entraînement
     model.train(train_loader, val_loader, epochs=num_epochs)
+    model.close_logger()
 
     # 📈 Visualisation
     visualizer = Visualizer()
@@ -64,7 +79,16 @@ def main():
         num_epochs=num_epochs,
     )
 
+    # 🚦 Lancer TensorBoard si demandé
+    if args.tensorboard:
+        # Lance dans un thread pour ne pas bloquer la fin du script
+        tb_thread = Thread(target=launch_tensorboard, args=("runs",))
+        tb_thread.start()
+
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Training script with optional TensorBoard launch")
+    parser.add_argument('--tensorboard', action='store_true', help="Lancer TensorBoard après l'entraînement")
+    args = parser.parse_args()
     main()
     print()
