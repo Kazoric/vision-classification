@@ -34,7 +34,7 @@ class Model(ABC):
 
         self.num_classes = num_classes
         self.model = self.build_model().to(self.device)
-        self.criterion = nn.CrossEntropyLoss()
+        self.criterion = nn.CrossEntropyLoss(label_smoothing=0)
         self.metrics = metrics
 
         if optimizer_cls is None:
@@ -96,6 +96,19 @@ class Model(ABC):
 
     def predict(self, inputs, return_probs=False):
         return self.predictor.predict(inputs, return_probs=return_probs)
+    
+    def predict_on_loader(self, dataloader):
+        all_preds = []
+        all_labels = []
+
+        for inputs, labels in dataloader:
+            preds = self.predict(inputs)
+            all_preds.append(preds)
+            all_labels.append(labels)
+
+        y_pred = torch.cat(all_preds)
+        y_true = torch.cat(all_labels)
+        return y_true, y_pred
 
     def load_checkpoint(self):
         success = self.checkpoint.load_latest()

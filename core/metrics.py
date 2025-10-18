@@ -1,5 +1,9 @@
 # core/metrics.py
 
+import torch
+import matplotlib.pyplot as plt
+import seaborn as sns
+
 def accuracy_score_torch(y_true, y_pred):
     correct = (y_true == y_pred).sum().item()
     total = y_true.size(0)
@@ -38,6 +42,22 @@ def recall_score_torch(y_true, y_pred, num_classes):
         recall = tp / (tp + fn + 1e-8)
         recalls.append(recall)
     return sum(recalls) / num_classes
+
+def confusion_matrix_torch(y_true, y_pred, num_classes):
+    with torch.no_grad():
+        indices = num_classes * y_true + y_pred
+        cm = torch.bincount(indices, minlength=num_classes*num_classes)
+        cm = cm.reshape(num_classes, num_classes)
+    return cm
+
+def plot_confusion_matrix(cm, class_names):
+    plt.figure(figsize=(8,6))
+    sns.heatmap(cm.cpu().numpy(), annot=True, fmt='d', cmap='Blues',
+                xticklabels=class_names, yticklabels=class_names)
+    plt.xlabel('Predicted')
+    plt.ylabel('True')
+    plt.title('Confusion Matrix')
+    plt.show()
 
 METRICS = {
     "Accuracy": accuracy_score_torch,

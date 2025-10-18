@@ -2,6 +2,7 @@
 *.py[codz]
 *$py.class
 
+/data/
 /experiments/
 /checkpoints/
 /cifar-100-python/
