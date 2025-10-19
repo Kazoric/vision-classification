@@ -22,7 +22,7 @@ class Predictor:
             - ou probabilités si return_probs=True
         """
         with torch.no_grad():
-            inputs = inputs.to(self.device)
+            inputs = inputs.to(self.device, non_blocking=True)
             outputs = self.model(inputs)
 
             if return_probs:

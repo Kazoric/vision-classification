@@ -1,316 +1,195 @@
-# import numpy as np
-# import os
-# import pickle
-# from PIL import Image
-# import torch
-# from tqdm import tqdm
+# data_loader.py
 
-# from torch.utils.data import Dataset, DataLoader
-# from torchvision import transforms
-
-
-# def compute_mean_std(dataset):
-#     """
-#     Calcule la moyenne et l'écart-type (par canal) d'un dataset Torch.
-#     Le dataset doit retourner des PIL Images (avant ToTensor).
-#     """
-#     loader = DataLoader(dataset, batch_size=64, shuffle=False, num_workers=0)
-
-#     mean = torch.zeros(3)
-#     std = torch.zeros(3)
-#     n_samples = 0
-
-#     print("Calcul des moyennes et écarts-types...")
-#     for images, _ in tqdm(loader):
-#         # images = torch.stack([transforms.ToTensor()(img) for img in images])  # (B, C, H, W)
-#         n_samples += images.size(0)
-#         mean += images.mean(dim=[0, 2, 3]) * images.size(0)
-#         std += images.std(dim=[0, 2, 3]) * images.size(0)
-
-#     mean /= n_samples
-#     std /= n_samples
-
-#     return mean.tolist(), std.tolist()
-
-# def unpickle(file):
-#     with open(file, 'rb') as fo:
-#         dict = pickle.load(fo, encoding='bytes')
-#     return dict
-
-# class CIFAR100CustomDataset(Dataset):
-#     def __init__(self, data_path, train=True, transform=None):
-#         file = 'train' if train else 'test'
-#         file_path = os.path.join(data_path, file)
-#         data_dict = unpickle(file_path)
-
-#         self.data = data_dict[b'data']
-#         self.labels = data_dict[b'coarse_labels']
-#         self.transform = transform
-
-#         # Convertir les données en images (N, 3, 32, 32)
-#         self.data = self.data.reshape(-1, 3, 32, 32).astype(np.uint8)
-
-#     def __len__(self):
-#         return len(self.data)
-
-#     def __getitem__(self, index):
-#         image = self.data[index].transpose(1, 2, 0)  # Convertir en HWC pour PIL
-#         label = self.labels[index]
-
-#         # Convertir en PIL.Image pour les transforms de torchvision
-#         image = Image.fromarray(image)
-
-#         if self.transform:
-#             image = self.transform(image)
-
-#         return image, label
-    
-
-# def get_custom_cifar100_dataloaders(data_path, batch_size=64, num_workers=0):
-#     transform_train = transforms.Compose([
-#         transforms.RandomCrop(32, padding=4),
-#         transforms.RandomHorizontalFlip(),
-#         transforms.RandomRotation(15),
-#         transforms.ToTensor(),
-#         transforms.Normalize((0.5071, 0.4865, 0.4409),
-#                              (0.2673, 0.2564, 0.2762))
-#     ])
-
-#     transform_test = transforms.Compose([
-#         transforms.ToTensor(),
-#         transforms.Normalize((0.5071, 0.4865, 0.4409),
-#                              (0.2673, 0.2564, 0.2762))
-#     ])
-
-#     train_dataset = CIFAR100CustomDataset(data_path, train=True, transform=transform_train)
-#     test_dataset = CIFAR100CustomDataset(data_path, train=False, transform=transform_test)
-
-#     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers)
-#     test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers)
-
-#     return train_loader, test_loader
-
-# # def get_custom_cifar100_dataloaders(data_path, batch_size=64, num_workers=0):
-# #     transform_temp = transforms.Compose([
-# #         transforms.ToTensor()
-# #     ])
-# #     train_dataset_raw = CIFAR100CustomDataset(data_path, train=True, transform=transform_temp)
-# #     mean, std = compute_mean_std(train_dataset_raw)
-# #     print(f"Mean: {mean}")
-# #     print(f"Std: {std}")
-
-# #     transform_train = transforms.Compose([
-# #         transforms.RandomCrop(32, padding=4),
-# #         transforms.RandomHorizontalFlip(),
-# #         transforms.RandomRotation(15),
-# #         transforms.ToTensor(),
-# #         transforms.Normalize(mean,
-# #                              std)
-# #     ])
-
-# #     transform_test = transforms.Compose([
-# #         transforms.ToTensor(),
-# #         transforms.Normalize(mean,
-# #                              std)
-# #     ])
-
-# #     train_dataset = CIFAR100CustomDataset(data_path, train=True, transform=transform_train)
-# #     test_dataset = CIFAR100CustomDataset(data_path, train=False, transform=transform_test)
-
-# #     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers)
-# #     test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers)
-
-# #     return train_loader, test_loader
-
-
-
-# def read_labels(path_to_labels):
-#     """
-#     :param path_to_labels: path to the binary file containing labels from the STL-10 dataset
-#     :return: an array containing the labels
-#     """
-#     with open(path_to_labels, 'rb') as f:
-#         labels = np.fromfile(f, dtype=np.uint8)
-#         return labels
-
-
-# def read_all_images(path_to_data):
-#     """
-#     :param path_to_data: the file containing the binary images from the STL-10 dataset
-#     :return: an array containing all the images
-#     """
-
-#     with open(path_to_data, 'rb') as f:
-#         # read whole file in uint8 chunks
-#         everything = np.fromfile(f, dtype=np.uint8)
-
-#         # We force the data into 3x96x96 chunks, since the
-#         # images are stored in "column-major order", meaning
-#         # that "the first 96*96 values are the red channel,
-#         # the next 96*96 are green, and the last are blue."
-#         # The -1 is since the size of the pictures depends
-#         # on the input file, and this way numpy determines
-#         # the size on its own.
-
-#         images = np.reshape(everything, (-1, 3, 96, 96))
-
-#         # Now transpose the images into a standard image format
-#         # readable by, for example, matplotlib.imshow
-#         # You might want to comment this line or reverse the shuffle
-#         # if you will use a learning algorithm like CNN, since they like
-#         # their channels separated.
-#         # images = np.transpose(images, (0, 3, 2, 1))
-#         return images
-    
-
-# class STL10CustomDataset(Dataset):
-#     def __init__(self, file_path, train=True, transform=None):
-#         file = 'train' if train else 'test'
-#         data_path = os.path.join(file_path, f'{file}_X.bin')
-#         labels_path = os.path.join(file_path, f'{file}_y.bin')
-#         self.data = read_all_images(data_path)
-#         self.labels = read_labels(labels_path)
-
-#         self.transform = transform
-
-#         # Convertir les données en images (N, 3, 96, 96)
-#         self.data = self.data.reshape(-1, 3, 96, 96).astype(np.uint8)
-
-#     def __len__(self):
-#         return len(self.data)
-
-#     def __getitem__(self, index):
-#         image = self.data[index].transpose(1, 2, 0)  # Convertir en HWC pour PIL
-#         label = self.labels[index] - 1
-
-#         # Convertir en PIL.Image pour les transforms de torchvision
-#         image = Image.fromarray(image)
-
-#         if self.transform:
-#             image = self.transform(image)
-
-#         return image, label
-    
-
-# def get_custom_stl10_dataloaders(data_path, batch_size=64, num_workers=0):
-#     transform_train = transforms.Compose([
-#         transforms.RandomCrop(32, padding=4),
-#         transforms.RandomHorizontalFlip(),
-#         transforms.ToTensor(),
-#         transforms.Normalize((0.5071, 0.4865, 0.4409),
-#                              (0.2673, 0.2564, 0.2762))
-#     ])
-
-#     transform_test = transforms.Compose([
-#         transforms.ToTensor(),
-#         transforms.Normalize((0.5071, 0.4865, 0.4409),
-#                              (0.2673, 0.2564, 0.2762))
-#     ])
-
-#     train_dataset = STL10CustomDataset(data_path, train=True, transform=transform_train)
-#     test_dataset = STL10CustomDataset(data_path, train=False, transform=transform_test)
-
-#     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers)
-#     test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers)
-
-#     return train_loader, test_loader
-
-
-import os
+import os, math
+import numpy as np
 import torch
 from torchvision import datasets, transforms
 from torch.utils.data import DataLoader
 
-def get_transforms(image_size):
+# -------------------------------------------------
+# Utility to compute per‑channel mean & std
+# -------------------------------------------------
+def compute_mean_std(dataset: torch.utils.data.Dataset, root_dir, batch_size, image_size):
     """
-    Définit les transformations standard pour l'entraînement et la validation.
+    Computes the per‑channel mean and standard deviation of a dataset.
+
+    Parameters
+    ----------
+    dataset : torch.utils.data.Dataset
+        A dataset that returns ``(image, target)`` pairs where *image* is
+        a ``torch.Tensor`` of shape ``[C, H, W]`` (typically 3‑channel RGB).
+
+    Returns
+    -------
+    mean : tuple[float, float, float]
+        Mean for each channel (R, G, B).
+    std  : tuple[float, float, float]
+        Standard deviation for each channel (R, G, B).
     """
-    # Note: On utilise souvent des transformations d'augmentation plus légères 
-    # ou spécifiques pour CIFAR (ex: RandomCrop), mais on garde ici un standard
-    # qui inclut un redimensionnement si image_size est > taille native.
-    train_transforms = transforms.Compose([
-        # transforms.Resize(image_size),
-        transforms.RandomCrop(32, padding=4),
+    transform = transforms.Compose([
+        transforms.Resize(image_size),
+        transforms.ToTensor()
+    ])
+    temp_train_set = dataset(root=root_dir, download=True, transform=transform)
+    
+    loader = DataLoader(temp_train_set, batch_size=batch_size, shuffle=False, num_workers=0)
+
+    n_pixels = 0
+    sum_ = torch.zeros(3)
+    sum_sq = torch.zeros(3)
+
+    for images, _ in loader:
+        b, c, h, w = images.shape
+        pixels = b * h * w
+        n_pixels += pixels
+
+        sum_ += images.sum(dim=[0, 2, 3])
+        sum_sq += (images ** 2).sum(dim=[0, 2, 3])
+
+    mean = sum_ / n_pixels
+    std = (sum_sq / n_pixels - mean ** 2).sqrt()
+
+    return mean.tolist(), std.tolist()
+
+# -------------------------------------------------
+# Updated get_transforms that accepts mean/std
+# -------------------------------------------------
+def get_transforms(image_size=(224,224), resize=False, mean=None, std=None):
+    """
+    Returns a pair of ``Compose`` objects for training & validation.
+    If *mean* and *std* are ``None`` the ImageNet defaults are used.
+    """
+    if mean is None:
+        mean = (0.485, 0.456, 0.406)
+    if std is None:
+        std = (0.229, 0.224, 0.225)
+
+    train_transform_list = []
+    val_transform_list = []
+    if resize:
+        train_transform_list.append(transforms.Resize(image_size))
+        val_transform_list.append(transforms.Resize(image_size))
+
+    train_transform_list.extend([
+        # transforms.Resize(image_size),   # Uncomment if you need resizing
+        transforms.RandomCrop(image_size, padding=image_size[0]//8),
         transforms.RandomHorizontalFlip(),
         transforms.RandomRotation(15),
         transforms.ToTensor(),
-        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]), # ImageNet Norms
+        transforms.Normalize(mean=mean, std=std),
     ])
-    
-    val_transforms = transforms.Compose([
+
+    val_transform_list.extend([
         # transforms.Resize(image_size),
         transforms.ToTensor(),
-        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+        transforms.Normalize(mean=mean, std=std),
     ])
-    
-    return train_transforms, val_transforms
 
+    return transforms.Compose(train_transform_list), transforms.Compose(val_transform_list)
 
+# -------------------------------------------------
+# Loading the dataset
+# -------------------------------------------------
 def get_torchvision_dataset(
-    dataset_name: str, 
-    root_dir: str = './data', 
-    batch_size: int = 64, 
-    num_workers: int = 0, 
-    image_size: int = 224
+    dataset_name: str,
+    root_dir: str = './data',
+    batch_size: int = 64,
+    num_workers: int = 0,
+    use_computed_stats: bool = False,
 ):
     """
-    Charge un dataset standard de torchvision (ex: CIFAR10, CIFAR100).
-    Télécharge le dataset si nécessaire (s'il n'existe pas déjà dans root_dir).
+    Loads a standard torchvision dataset (e.g. CIFAR10, CIFAR100).
+    If *use_computed_stats* is ``True`` the function will compute
+    the mean & std on the training split and use those for
+    ``transforms.Normalize``.
     """
     dataset_name = dataset_name.upper()
-    
-    # Mapping des noms de datasets aux classes de torchvision
-    TORCHVISION_DATASETS = {
-        'CIFAR10': datasets.CIFAR10,
-        'CIFAR100': datasets.CIFAR100,
-        # Ajoutez d'autres datasets ici, ex: 'MNIST': datasets.MNIST
-    }
 
-    if dataset_name not in TORCHVISION_DATASETS:
-        raise ValueError(f"Dataset '{dataset_name}' non supporté. Supportés: {list(TORCHVISION_DATASETS.keys())}")
+    if dataset_name not in DATASET_CONFIGS:
+        raise ValueError(
+            f"Dataset '{dataset_name}' not supported. Supported: {list(DATASET_CONFIGS.keys())}"
+        )
 
-    dataset_class = TORCHVISION_DATASETS[dataset_name]
-    train_transform, val_transform = get_transforms(image_size)
-
-    # Créer le répertoire de données s'il n'existe pas
+    config = DATASET_CONFIGS[dataset_name]
+    dataset_class = config['class']
+    image_size = config['image_size']
+    resize = config['resize']
     os.makedirs(root_dir, exist_ok=True)
-    
-    # 1. Chargement du jeu d'entraînement
-    # L'argument `download=True` assure le téléchargement uniquement si le dataset n'est pas trouvé.
+
+    # Create a temporary loader to compute stats if requested
+    if use_computed_stats:
+        mean, std = compute_mean_std(dataset_class, root_dir, batch_size, image_size)
+        print(f"[Stats] {dataset_name} mean: {mean}, std: {std}")
+    else:
+        mean, std = None, None
+
+    # Build the actual transforms
+    train_transform, val_transform = get_transforms(image_size, resize, mean=mean, std=std)
+
     try:
         train_set = dataset_class(
-            root=root_dir, 
-            train=True, 
-            download=True,  # Télécharge s'il n'existe pas
-            transform=train_transform
+            root=root_dir,
+            download=True,
+            transform=train_transform,
+            **config['train_args']
         )
-        # 2. Chargement du jeu de validation
         val_set = dataset_class(
-            root=root_dir, 
-            train=False, 
-            download=True, # Télécharge s'il n'existe pas
-            transform=val_transform
+            root=root_dir,
+            download=True,
+            transform=val_transform,
+            **config['val_args']
         )
-        print(f"Dataset '{dataset_name}' chargé (téléchargé si nécessaire) à partir de '{root_dir}'.")
-
+        print(f"Dataset '{dataset_name}' loaded (downloaded if necessary) from '{root_dir}'.")
     except Exception as e:
-        print(f"Erreur lors du chargement/téléchargement du dataset {dataset_name}: {e}")
+        print(f"Error loading/downloading dataset {dataset_name}: {e}")
         raise
 
-    # 3. Création des DataLoaders
+    # Create the DataLoaders
     train_loader = DataLoader(
-        train_set, 
-        batch_size=batch_size, 
-        shuffle=True, 
+        train_set,
+        batch_size=batch_size,
+        shuffle=True,
         num_workers=num_workers,
-        pin_memory=True # Optimisation PyTorch
+        pin_memory=True,
     )
     val_loader = DataLoader(
-        val_set, 
-        batch_size=batch_size, 
-        shuffle=False, 
+        val_set,
+        batch_size=batch_size,
+        shuffle=False,
         num_workers=num_workers,
-        pin_memory=True
+        pin_memory=True,
     )
 
     return train_loader, val_loader
+
+
+DATASET_CONFIGS = {
+    'CIFAR10': {
+        'class': datasets.CIFAR10,
+        'train_args': {'train': True},
+        'val_args': {'train': False},
+        'resize': False,
+        'image_size': (32, 32)
+    },
+    'CIFAR100': {
+        'class': datasets.CIFAR100,
+        'train_args': {'train': True},
+        'val_args': {'train': False},
+        'resize': False,
+        'image_size': (32, 32)
+    },
+    'IMAGENETTE': {
+        'class': datasets.Imagenette,
+        'train_args': {'split': 'train'},
+        'val_args': {'split': 'val'},
+        'resize': True,
+        'image_size': (160, 160)
+    },
+    'IMAGENET': {
+        'class': datasets.ImageNet,
+        'train_args': {'split': 'train'},
+        'val_args': {'split': 'val'},
+        'resize': True,
+        'image_size': (224, 224)
+    }
+}

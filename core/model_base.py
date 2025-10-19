@@ -18,6 +18,7 @@ class Model(ABC):
                  lr=0.001, 
                  save=False, 
                  model_name="model",
+                 dataset_name="unknown",
                  run_id=None, 
                  optimizer_cls=None, 
                  optimizer_params=None,
@@ -29,7 +30,7 @@ class Model(ABC):
 
         if run_id is None:
             date = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-            run_id = f"{model_name}_{date}"
+            run_id = f"{model_name}_{dataset_name}_{date}"
         self.run_id = run_id
 
         self.num_classes = num_classes
@@ -108,7 +109,7 @@ class Model(ABC):
 
         y_pred = torch.cat(all_preds)
         y_true = torch.cat(all_labels)
-        return y_true, y_pred
+        return y_true, y_pred.cpu()
 
     def load_checkpoint(self):
         success = self.checkpoint.load_latest()
@@ -137,7 +138,7 @@ class Model(ABC):
         path = os.path.join(f"experiments/{self.run_id}", "meta.json")
         with open(path, "w") as f:
             json.dump(meta, f, indent=4)
-        print(f"✅ Hyperparamètres sauvegardés dans {path}")
+        print(f"Hyperparamètres sauvegardés dans {path}")
 
     def get_model_specific_params(self):
         """

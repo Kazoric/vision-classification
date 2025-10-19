@@ -47,8 +47,8 @@ class Trainer:
             all_preds = []
             all_labels = []
 
-            for images, labels in tqdm(train_loader, desc=f"🎯 Epoch {epoch+1}/{epochs}"):
-                images, labels = images.to(self.device), labels.to(self.device)
+            for images, labels in tqdm(train_loader, desc=f"Epoch {epoch+1}/{epochs}"):
+                images, labels = images.to(self.device, non_blocking=True), labels.to(self.device, non_blocking=True)
 
                 self.optimizer.zero_grad()
                 outputs = self.model(images)
@@ -99,7 +99,7 @@ class Trainer:
 
         with torch.no_grad():
             for images, labels in data_loader:
-                images, labels = images.to(self.device), labels.to(self.device)
+                images, labels = images.to(self.device, non_blocking=True), labels.to(self.device, non_blocking=True)
                 outputs = self.model(images)
                 loss = self.criterion(outputs, labels)
 

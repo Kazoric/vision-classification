@@ -37,7 +37,7 @@ class CheckpointManager:
         path = os.path.join(self.checkpoint_dir, filename)
 
         torch.save(checkpoint, path)
-        print(f"✅ Checkpoint saved: {path}")
+        print(f"Checkpoint saved: {path}")
 
         # Mettre à jour les métadonnées
         self.best_val_loss = val_loss
