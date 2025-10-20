@@ -90,3 +90,10 @@ class VGGModel(Model):
             variant=self.variant,
             use_batchnorm=self.use_batchnorm
         )
+    
+    def get_model_specific_params(self):
+        return {
+            "num_classes": self.num_classes,
+            "variant": self.variant,
+            "use_batchnorm": self.use_batchnorm,
+        }

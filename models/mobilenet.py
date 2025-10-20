@@ -106,3 +106,10 @@ class MobileNetModel(Model):
             width_multiplier=self.width_multiplier,
             use_batchnorm=self.use_batchnorm
         )
+    
+    def get_model_specific_params(self):
+        return {
+            "num_classes": self.num_classes,
+            "width_multiplier": self.width_multiplier,
+            "use_batchnorm": self.use_batchnorm,
+        }

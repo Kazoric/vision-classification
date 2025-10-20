@@ -78,7 +78,7 @@ class BottleneckBlock(nn.Module):
 
     
 class WideResNetArchitecture(nn.Module):
-    def __init__(self, num_class, layer_list, block=BottleneckBlock, widen_factor=1, **param):
+    def __init__(self, num_class, layer_list, block=BottleneckBlock, widen_factor=2, **param):
         super(WideResNetArchitecture, self).__init__()
         self.block = block
         self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -177,18 +177,28 @@ class WideResNetModel(Model):
         self.name = 'wide_resnet'
         self.layer_list = layer_list
         self.widen_factor = widen_factor
+        self.block_str = block
         if block == 'Bottleneck':
             self.block = BottleneckBlock
-        else:
+        elif block == 'Basic':
             self.block = BasicBlock
+        else:
+            raise ValueError(f"Unknown block type: {block}")
         super().__init__(num_classes=num_classes, **kwargs)
 
     def build_model(self):
         print(f"Building WideResNet with {len(self.layer_list)} stages: {self.layer_list} and widen factor {self.widen_factor}")
-        # Tu peux configurer les paramètres du WideResNet ici
         return WideResNetArchitecture(
             num_class=self.num_classes,
             layer_list=self.layer_list,
             block=self.block,
             widen_factor=self.widen_factor
         )
+    
+    def get_model_specific_params(self):
+        return {
+            "num_classes": self.num_classes,
+            "layer_list": self.layer_list,
+            "block": self.block_str,
+            "widen_factor": self.widen_factor
+        }

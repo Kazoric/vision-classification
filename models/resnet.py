@@ -187,7 +187,6 @@ class ResNetModel(Model):
 
     def build_model(self):
         print(f"Building ResNet with {len(self.layer_list)} stages: {self.layer_list}")
-        # Tu peux configurer les paramètres du ResNet ici
         return ResNetArchitecture(
             num_class=self.num_classes,
             layer_list=self.layer_list,

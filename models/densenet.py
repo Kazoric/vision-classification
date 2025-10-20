@@ -137,3 +137,13 @@ class DenseNetModel(Model):
             init_channels=self.init_channels,
             dropout=self.dropout
         )
+    
+    def get_model_specific_params(self):
+        return {
+            "num_classes": self.num_classes,
+            "block_config": self.block_config,
+            "growth_rate": self.growth_rate,
+            "compression": self.compression,
+            "init_channels": self.init_channels,
+            "dropout": self.dropout,
+        }
