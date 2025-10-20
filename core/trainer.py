@@ -1,71 +1,149 @@
-# core/trainer.py
-
+# Import necessary libraries
 import numpy as np
 import torch
+from torch import nn, optim
+from torch.utils.data import DataLoader
 from tqdm import tqdm
+from typing import Callable, Optional
 
 from core.metrics import METRICS
 
 class Trainer:
-    def __init__(self, model, optimizer, criterion, device, save=False, checkpoint_fn=None, scheduler=None, metrics=None, num_classes=None):
+    """
+    Class for training a PyTorch model.
+    
+    Attributes:
+        model (nn.Module): Trained model to use for prediction
+        optimizer (torch.optim.Optimizer): Optimizer to use for training
+        criterion (torch.nn.Module): Loss function to use for training
+        device (str): Device to use for training (e.g., 'cuda' or 'cpu')
+        save (bool): Whether to save the best model during training
+        checkpoint_fn (function): External checkpoint saving function
+        scheduler (torch.optim.lr_scheduler.LRScheduler): Learning rate scheduler to use
+        num_classes (int): Number of classes in the dataset
+    """
+    
+    def __init__(
+        self,
+        model: nn.Module,
+        optimizer: torch.optim.Optimizer,
+        criterion: torch.nn.Module,
+        device: str,
+        save: bool = False,
+        checkpoint_fn: Callable[[int, float], None] = None,
+        scheduler: Optional[optim.lr_scheduler.LRScheduler] = None,
+        metrics: Optional[list] = None,
+        num_classes: Optional[int] = None
+    ) -> None:
         """
-        model: le modèle PyTorch (nn.Module)
-        optimizer: optimiseur (ex: Adam)
-        criterion: fonction de perte (ex: CrossEntropyLoss)
-        device: 'cuda' ou 'cpu'
-        save: booléen, indique si on sauvegarde le meilleur modèle
-        checkpoint_fn: fonction de sauvegarde externe (ex: model.save_checkpoint)
+        Initialize the Trainer object.
+        
+        Args:
+            model (nn.Module): Trained model to use for prediction
+            optimizer (torch.optim.Optimizer): Optimizer to use for training
+            criterion (torch.nn.Module): Loss function to use for training
+            device (str): Device to use for training
+            save (bool): Whether to save the best model during training
+            checkpoint_fn (function): External checkpoint saving function
+            scheduler (torch.optim.lr_scheduler.LRScheduler): Learning rate scheduler to use
+            metrics (list): List of evaluation metrics to track
+            num_classes (int): Number of classes in the dataset
+        
+        Returns:
+            None
         """
+        
+        # Set model and optimizer attributes
         self.model = model
         self.optimizer = optimizer
+        
+        # Set criterion attribute
         self.criterion = criterion
+        
+        # Set device attribute
         self.device = device
+        
+        # Set save attribute
         self.save = save
+        
+        # Set checkpoint saving function attribute
         self.save_checkpoint = checkpoint_fn
+        
+        # Set scheduler attribute
         self.scheduler = scheduler
+        
+        # Set number of classes attribute
         self.num_classes = num_classes
 
+        # Initialize loss and metric tracking lists
         self.train_loss = []
         self.valid_loss = []
 
+        # Initialize best validation loss and start epoch attributes
         self.best_val_loss = float('inf')
         self.start_epoch = 0
 
+        # Initialize metrics attribute
         if metrics:
             self.metrics = {
                 name: METRICS[name] for name in metrics if name in METRICS
             }
         else:
             self.metrics = {}
+        
+        # Initialize train and validation metric tracking dictionaries
         self.train_metrics = {name: [] for name in self.metrics}
         self.valid_metrics = {name: [] for name in self.metrics}
 
-    def train(self, train_loader, val_loader=None, epochs=10):
+    def train(self, train_loader: DataLoader, val_loader: DataLoader = None, epochs: int = 10) -> None:
+        """
+        Train the model on a given dataset.
+        
+        Args:
+            train_loader (DataLoader): Training data loader
+            val_loader (DataLoader): Validation data loader (optional)
+            epochs (int): Number of training epochs
+        
+        Returns:
+            None
+        """
+        
+        # Iterate over training epochs
         for epoch in range(self.start_epoch, epochs):
+            
+            # Set model to training mode
             self.model.train()
+            
+            # Initialize running loss and prediction tracking lists
             running_loss = 0.0
             all_preds = []
             all_labels = []
 
+            # Iterate over training data loader
             for images, labels in tqdm(train_loader, desc=f"Epoch {epoch+1}/{epochs}"):
+                
+                # Move input to specified device
                 images, labels = images.to(self.device, non_blocking=True), labels.to(self.device, non_blocking=True)
 
+                # Zero gradients and make predictions
                 self.optimizer.zero_grad()
                 outputs = self.model(images)
                 loss = self.criterion(outputs, labels)
                 loss.backward()
                 self.optimizer.step()
 
+                # Update running loss and prediction tracking lists
                 running_loss += loss.item()
                 _, predicted = torch.max(outputs, 1)
                 all_preds.append(predicted)
                 all_labels.append(labels)
 
+            # Update train loss and metric tracking lists
             all_preds = torch.cat(all_preds)
             all_labels = torch.cat(all_labels)
-
             self.train_loss.append(running_loss)
 
+            # Compute and store metrics
             metric_outputs = {}
             for name, fn in self.metrics.items():
                 if fn.__code__.co_argcount == 3:
@@ -75,44 +153,68 @@ class Trainer:
                 self.train_metrics[name].append(score)
                 metric_outputs[name] = score
 
+            # Print training metrics
             metrics_str = " | ".join(f"{name}: {value:.4f}" for name, value in metric_outputs.items())
             print(f"{'Train':<12} | Loss: {running_loss:.4f} | {metrics_str}")
 
+            # Evaluate model on validation set if available
             if val_loader:
                 val_loss = self.evaluate(val_loader)
 
+                # Save best model if validation loss improves
                 if self.save and val_loss < self.best_val_loss:
                     self.best_val_loss = val_loss
                     if self.save_checkpoint:
                         self.save_checkpoint(epoch + 1, val_loss)
             
+            # Update learning rate scheduler if available
             if self.scheduler is not None:
                 self.scheduler.step()
 
             print()
 
-    def evaluate(self, data_loader):
+    def evaluate(self, data_loader: DataLoader) -> float:
+        """
+        Evaluate the model on a given dataset.
+        
+        Args:
+            data_loader (DataLoader): Data loader to use for evaluation
+        
+        Returns:
+            float: Validation loss
+        """
+        
+        # Set model to evaluation mode
         self.model.eval()
+        
+        # Initialize running loss and prediction tracking lists
         running_loss = 0.0
         all_preds = []
         all_labels = []
 
+        # Iterate over data loader
         with torch.no_grad():
             for images, labels in data_loader:
+                
+                # Move input to specified device
                 images, labels = images.to(self.device, non_blocking=True), labels.to(self.device, non_blocking=True)
+                
+                # Make predictions
                 outputs = self.model(images)
                 loss = self.criterion(outputs, labels)
 
+                # Update running loss and prediction tracking lists
                 running_loss += loss.item()
                 _, predicted = torch.max(outputs, 1)
                 all_preds.append(predicted)
                 all_labels.append(labels)
 
-            all_preds = torch.cat(all_preds)
-            all_labels = torch.cat(all_labels)
-
+        # Update validation loss and metric tracking lists
+        all_preds = torch.cat(all_preds)
+        all_labels = torch.cat(all_labels)
         self.valid_loss.append(running_loss)
 
+        # Compute and store metrics
         metric_outputs = {}
         for name, fn in self.metrics.items():
             if fn.__code__.co_argcount == 3:
@@ -122,7 +224,8 @@ class Trainer:
             self.valid_metrics[name].append(score)
             metric_outputs[name] = score
 
+        # Print validation metrics
         metrics_str = " | ".join(f"{name}: {value:.4f}" for name, value in metric_outputs.items())
         print(f"{'Validation':<12} | Loss: {running_loss:.4f} | {metrics_str}")
-
+        
         return running_loss

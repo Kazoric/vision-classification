@@ -1,13 +1,42 @@
-# core/visualizer.py
-
+# Import necessary libraries
 import matplotlib.pyplot as plt
 import os
+from typing import Optional
+
+from core.trainer import Trainer
 
 class Visualizer:
-    def __init__(self):
+    """
+    Class for visualizing training metrics.
+    
+    Attributes:
+        None
+    """
+    
+    def __init__(self) -> None:
+        """
+        Initialize the Visualizer object.
+        
+        Args:
+            None
+        """
+        
         pass
 
-    def plot_metrics(self, trainer, run_id, save=True):
+    def plot_metrics(self, trainer: Trainer, run_id: str, save: Optional[bool] = True):
+        """
+        Plot training and validation loss, as well as each metric separately.
+        
+        Args:
+            trainer (Trainer): Trainer object containing training metrics
+            run_id (str): Unique identifier for the current experiment
+            save (bool): Whether to save plots to file (default: True)
+        
+        Returns:
+            None
+        """
+        
+        # Get epochs range
         epochs = range(1, len(trainer.train_loss) + 1)
 
         # Plot loss
@@ -39,6 +68,7 @@ class Visualizer:
             plt.grid(True)
             plt.tight_layout()
 
+            # Save plot to file if save=True
             if save:
                 save_path = f"experiments/{run_id}/plots"
                 os.makedirs(save_path, exist_ok=True)

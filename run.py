@@ -1,12 +1,9 @@
-# run.py
-
 import torch
 from torch import optim
 from torch.optim.lr_scheduler import StepLR
 import time
 
 from models.resnet import ResNetModel
-# from data_loader import get_custom_cifar100_dataloaders, get_custom_stl10_dataloaders
 from data_loader import get_torchvision_dataset
 from core.visualizer import Visualizer
 from core.metrics import confusion_matrix_torch, plot_confusion_matrix
@@ -20,9 +17,9 @@ def main():
     scheduler = StepLR
     scheduler_params = {"step_size": 10, "gamma": 0.1}
     num_epochs = 20
-    num_classes = 10
+    num_classes = 100
     model_name = "ResNet"
-    dataset_name = 'CIFAR10'
+    dataset_name = 'CIFAR100'
     metrics=["F1", "Accuracy", "Precision", "Recall"]
     resume = False  # True pour charger un checkpoint s’il existe
     if resume:

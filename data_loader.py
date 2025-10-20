@@ -1,15 +1,19 @@
-# data_loader.py
-
 import os, math
 import numpy as np
 import torch
 from torchvision import datasets, transforms
 from torch.utils.data import DataLoader
+from typing import Tuple, Optional, List, Dict, Any
 
 # -------------------------------------------------
 # Utility to compute per‑channel mean & std
 # -------------------------------------------------
-def compute_mean_std(dataset: torch.utils.data.Dataset, root_dir, batch_size, image_size):
+def compute_mean_std(
+    dataset: torch.utils.data.Dataset,
+    root_dir: str,
+    batch_size: int,
+    image_size: Tuple[int, int]
+) -> Tuple[List[float], List[float]]:
     """
     Computes the per‑channel mean and standard deviation of a dataset.
 
@@ -54,7 +58,12 @@ def compute_mean_std(dataset: torch.utils.data.Dataset, root_dir, batch_size, im
 # -------------------------------------------------
 # Updated get_transforms that accepts mean/std
 # -------------------------------------------------
-def get_transforms(image_size=(224,224), resize=False, mean=None, std=None):
+def get_transforms(
+    image_size: Tuple[int, int] = (224,224),
+    resize: bool = False,
+    mean: Optional[Tuple[float, float, float]] = None,
+    std: Optional[Tuple[float, float, float]] = None
+) -> Tuple[transforms.Compose, transforms.Compose]:
     """
     Returns a pair of ``Compose`` objects for training & validation.
     If *mean* and *std* are ``None`` the ImageNet defaults are used.
@@ -96,7 +105,7 @@ def get_torchvision_dataset(
     batch_size: int = 64,
     num_workers: int = 0,
     use_computed_stats: bool = False,
-):
+) -> Tuple[DataLoader, DataLoader]:
     """
     Loads a standard torchvision dataset (e.g. CIFAR10, CIFAR100).
     If *use_computed_stats* is ``True`` the function will compute

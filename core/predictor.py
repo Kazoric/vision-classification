@@ -1,33 +1,64 @@
-# core/predictor.py
-
+# Import necessary libraries
 import torch
+from torch import nn
 
 class Predictor:
-    def __init__(self, model, device):
+    """
+    Class for making predictions using a trained model.
+    
+    Attributes:
+        model (nn.Module): Trained model to use for prediction
+        device (str): Device to use for prediction (e.g., 'cuda' or 'cpu')
+    """
+    
+    def __init__(self, model: nn.Module, device: str) -> None:
         """
-        model: nn.Module entraîné
-        device: 'cuda' ou 'cpu'
+        Initialize the Predictor object.
+        
+        Args:
+            model (nn.Module): Trained model to use for prediction
+            device (str): Device to use for prediction
+        
+        Returns:
+            None
         """
+        
+        # Set model and device attributes
         self.model = model
         self.device = device
+        
+        # Move model to specified device
         self.model.to(self.device)
+        
+        # Set model to evaluation mode
         self.model.eval()
 
-    def predict(self, inputs, return_probs=False):
+    def predict(self, inputs: torch.Tensor, return_probs: bool = False) -> torch.Tensor:
         """
-        inputs: image (1xC*H*W) ou batch (B x C x H x W), tensor déjà préprocessé
-        return_probs: si True, retourne les probabilités (softmax)
+        Make predictions on a given input.
+        
+        Args:
+            inputs (torch.Tensor): Input tensor (e.g., image or batch of images)
+            return_probs (bool): Whether to return class probabilities instead of indices
+        
         Returns:
-            - indices des classes (par défaut)
-            - ou probabilités si return_probs=True
+            torch.Tensor: Predicted class indices or probabilities
         """
+        
+        # Disable gradient computation for prediction
         with torch.no_grad():
+            
+            # Move input to specified device
             inputs = inputs.to(self.device, non_blocking=True)
+            
+            # Make predictions using model
             outputs = self.model(inputs)
 
+            # Return class probabilities if requested
             if return_probs:
                 probs = torch.softmax(outputs, dim=1)
                 return probs
 
+            # Otherwise, return predicted class indices
             _, predicted = torch.max(outputs, 1)
             return predicted
