@@ -5,6 +5,7 @@ import time
 
 from models.resnet import ResNetModel
 from models.wide_resnet import WideResNetModel
+from models.vit import ViTModel
 from data_loader import get_torchvision_dataset
 from core.visualizer import Visualizer
 from core.metrics import confusion_matrix_torch, plot_confusion_matrix
@@ -17,10 +18,10 @@ def main():
     learning_rate = 0.001
     scheduler = StepLR
     scheduler_params = {"step_size": 10, "gamma": 0.1}
-    num_epochs = 50
+    num_epochs = 20
     num_classes = 10
     label_smoothing = 0.1
-    model_name = "ResNet"
+    model_name = "ViT"
     dataset_name = 'Imagenette'
     metrics=["F1", "Accuracy", "Precision", "Recall"]
     resume = False  # True to load a checkpoint if it exists
@@ -41,17 +42,32 @@ def main():
 
 
     # 🧠 Model
-    model = ResNetModel(lr=learning_rate, model_name=model_name, dataset_name=dataset_name, save=True,
-                        run_id=run_id, # needed to resume
-                        # optimizer_cls=optimizer,
-                        # optimizer_params=optimizer_params,
-                        scheduler_cls = scheduler,
-                        scheduler_params = scheduler_params,
-                        metrics=metrics,
-                        num_classes=num_classes,
-                        # label_smoothing=label_smoothing,
-                        layer_list=[2,2,2,2], block='Bottleneck'
-                        )
+    # model = ResNetModel(lr=learning_rate, model_name=model_name, dataset_name=dataset_name, save=True,
+    #                     run_id=run_id, # needed to resume
+    #                     # optimizer_cls=optimizer,
+    #                     # optimizer_params=optimizer_params,
+    #                     scheduler_cls = scheduler,
+    #                     scheduler_params = scheduler_params,
+    #                     metrics=metrics,
+    #                     num_classes=num_classes,
+    #                     # label_smoothing=label_smoothing,
+    #                     layer_list=[2,2,2,2], block='Bottleneck'
+    #                     )
+    
+    model = ViTModel(
+        lr=learning_rate, model_name=model_name, dataset_name=dataset_name, save=True,
+        run_id=run_id, # needed to resume
+        # optimizer_cls=optimizer,
+        # optimizer_params=optimizer_params,
+        # scheduler_cls = scheduler,
+        # scheduler_params = scheduler_params,
+        metrics=metrics,
+        num_classes=num_classes,
+        image_size=train_loader.dataset[0][0].shape[-1],
+        patch_size = 16,
+        depth = 4,
+        # label_smoothing=label_smoothing
+    )
 
     # ♻️ Loading a checkpoint (optional)
     if resume:

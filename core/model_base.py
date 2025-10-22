@@ -50,7 +50,7 @@ class Model(ABC):
         scheduler_params: Optional[Dict[str, Any]] = None,
         metrics: Optional[List[str]] = None,
         num_classes: Optional[int] = None,
-        label_smoothing: Optional[float] = None
+        label_smoothing: float = 0
     ) -> None:
         """
         Initialize the Model object.
