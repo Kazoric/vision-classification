@@ -49,7 +49,8 @@ class Model(ABC):
         scheduler_cls: Any = None,
         scheduler_params: Optional[Dict[str, Any]] = None,
         metrics: Optional[List[str]] = None,
-        num_classes: Optional[int] = None
+        num_classes: Optional[int] = None,
+        label_smoothing: Optional[float] = None
     ) -> None:
         """
         Initialize the Model object.
@@ -86,7 +87,7 @@ class Model(ABC):
         self.model = self.build_model().to(self.device)
         
         # Initialize criterion (cross-entropy loss with label smoothing)
-        self.criterion = nn.CrossEntropyLoss(label_smoothing=0)
+        self.criterion = nn.CrossEntropyLoss(label_smoothing=label_smoothing)
         
         # Set metrics
         self.metrics = metrics

@@ -10,25 +10,26 @@ from core.visualizer import Visualizer
 from core.metrics import confusion_matrix_torch, plot_confusion_matrix
 
 def main():
-    # 🔧 Hyperparamètres
+    # 🔧 Hyperparameters
     optimizer = optim.SGD
     optimizer_params = {"momentum": 0.9, "weight_decay": 5e-4}
-    batch_size = 512
+    batch_size = 128
     learning_rate = 0.001
     scheduler = StepLR
     scheduler_params = {"step_size": 10, "gamma": 0.1}
     num_epochs = 50
     num_classes = 10
-    model_name = "Wide_ResNet"
+    label_smoothing = 0.1
+    model_name = "ResNet"
     dataset_name = 'Imagenette'
     metrics=["F1", "Accuracy", "Precision", "Recall"]
-    resume = False  # True pour charger un checkpoint s’il existe
+    resume = False  # True to load a checkpoint if it exists
     if resume:
         run_id = 'ResNet_Imagenette_2025-10-19_17-28-16'
     else:
         run_id = None
 
-    # 📦 Données
+    # 📦 Data
     train_loader, val_loader = get_torchvision_dataset(
         dataset_name=dataset_name, 
         root_dir='./data', 
@@ -39,7 +40,7 @@ def main():
         f"Configuration error: you set num_classes={num_classes}, but the dataset actually contains {len(train_loader.dataset.classes)} classes."
 
 
-    # 🧠 Modèle
+    # 🧠 Model
     model = ResNetModel(lr=learning_rate, model_name=model_name, dataset_name=dataset_name, save=True,
                         run_id=run_id, # needed to resume
                         # optimizer_cls=optimizer,
@@ -47,25 +48,26 @@ def main():
                         scheduler_cls = scheduler,
                         scheduler_params = scheduler_params,
                         metrics=metrics,
-                        num_classes=num_classes, 
+                        num_classes=num_classes,
+                        # label_smoothing=label_smoothing,
                         layer_list=[2,2,2,2], block='Bottleneck'
                         )
 
-    # ♻️ Chargement du checkpoint (optionnel)
+    # ♻️ Loading a checkpoint (optional)
     if resume:
         model.load_checkpoint()
 
-    # 🚀 Entraînement
+    # 🚀 Training
     start_time = time.time()
     model.train(train_loader, val_loader, epochs=num_epochs)
     end_time = time.time() - start_time
     print(f"Training took {end_time:.2f} seconds\n")
 
-    # 📈 Visualisation
+    # 📈 Visualization
     visualizer = Visualizer()
     visualizer.plot_metrics(model.trainer, model.run_id)
 
-    # 🔍 Prédiction d'exemple
+    # 🔍 Prediction
     data_iter = iter(val_loader)
     images, labels = next(data_iter)
     outputs = model.predict(images[:4])
