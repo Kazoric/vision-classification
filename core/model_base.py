@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 import os
 from datetime import datetime
 import json
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Callable
 
 # Import custom modules
 from core.trainer import Trainer
@@ -48,7 +48,7 @@ class Model(ABC):
         optimizer_params: Optional[Dict[str, Any]] = None,
         scheduler_cls: Any = None,
         scheduler_params: Optional[Dict[str, Any]] = None,
-        metrics: Optional[List[str]] = None,
+        metrics: Optional[dict[str, tuple[Callable, dict[str, Any]]]] = None,
         num_classes: Optional[int] = None,
         label_smoothing: float = 0
     ) -> None:
@@ -232,10 +232,6 @@ class Model(ABC):
 
     def save_hyperparams(
         self,
-        optimizer_name: str,
-        optimizer_params: Dict[str, Any],
-        scheduler_name: str,
-        scheduler_params: Dict[str, Any],
         batch_size: int,
         num_epochs: int
     ) -> None:
@@ -257,11 +253,11 @@ class Model(ABC):
             "batch_size": batch_size,
             "learning_rate": self.lr,
             "num_epochs": num_epochs,
-            "optimizer": optimizer_name,
-            "optimizer_params": optimizer_params,
-            "scheduler": scheduler_name,
-            "scheduler_params": scheduler_params,
-            "metrics": self.metrics,
+            "optimizer": self.optimizer_name,
+            "optimizer_params": self.optimizer_params,
+            "scheduler": self.scheduler_name,
+            "scheduler_params": self.scheduler_params,
+            "metrics": list(self.metrics.keys()),
             "model_params": self.get_model_specific_params()
         }
 

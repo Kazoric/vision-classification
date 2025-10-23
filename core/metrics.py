@@ -3,7 +3,7 @@ import torch
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-def accuracy_score_torch(y_true: torch.Tensor, y_pred: torch.Tensor) -> float:
+def accuracy_score_torch(y_true: torch.Tensor, y_pred_logits: torch.Tensor) -> float:
     """
     Compute the accuracy score of a model.
     
@@ -15,6 +15,8 @@ def accuracy_score_torch(y_true: torch.Tensor, y_pred: torch.Tensor) -> float:
         float: Accuracy score
     """
     
+    y_pred = y_pred_logits.argmax(dim=1)
+
     # Compute correct predictions and total number of samples
     correct = (y_true == y_pred).sum().item()
     total = y_true.size(0)
@@ -22,7 +24,27 @@ def accuracy_score_torch(y_true: torch.Tensor, y_pred: torch.Tensor) -> float:
     # Return accuracy score
     return correct / total
 
-def f1_score_torch(y_true: torch.Tensor, y_pred: torch.Tensor, num_classes: int) -> float:
+def topk_accuracy_torch(y_true: torch.Tensor, y_pred_logits: torch.Tensor, k: int = 5) -> float:
+    """
+    Compute the Top-k accuracy of a model.
+    
+    Args:
+        y_true (torch.Tensor): Ground truth labels, shape (N,)
+        y_pred_logits (torch.Tensor): Model output logits or probabilities, shape (N, C)
+        k (int): Value of k for Top-k accuracy
+        
+    Returns:
+        float: Top-k accuracy score
+    """
+    # Get top-k predicted class indices
+    topk_pred = torch.topk(y_pred_logits, k=k, dim=1).indices  # (N, k)
+    
+    # Check if true label is among the top-k predictions
+    correct = topk_pred.eq(y_true.view(-1, 1)).any(dim=1).sum().item()
+    total = y_true.size(0)
+    return correct / total
+
+def f1_score_torch(y_true: torch.Tensor, y_pred_logits: torch.Tensor, num_classes: int) -> float:
     """
     Compute the F1 score of a model.
     
@@ -34,6 +56,8 @@ def f1_score_torch(y_true: torch.Tensor, y_pred: torch.Tensor, num_classes: int)
     Returns:
         float: F1 score
     """
+
+    y_pred = y_pred_logits.argmax(dim=1)
     
     # Initialize list to store F1 scores for each class
     f1_per_class = []
@@ -59,7 +83,7 @@ def f1_score_torch(y_true: torch.Tensor, y_pred: torch.Tensor, num_classes: int)
     # Return macro average of F1 scores
     return sum(f1_per_class) / num_classes
 
-def precision_score_torch(y_true: torch.Tensor, y_pred: torch.Tensor, num_classes: int) -> float:
+def precision_score_torch(y_true: torch.Tensor, y_pred_logits: torch.Tensor, num_classes: int) -> float:
     """
     Compute the precision score of a model.
     
@@ -71,6 +95,8 @@ def precision_score_torch(y_true: torch.Tensor, y_pred: torch.Tensor, num_classe
     Returns:
         float: Precision score
     """
+
+    y_pred = y_pred_logits.argmax(dim=1)
     
     # Initialize list to store precision scores for each class
     precisions = []
@@ -91,7 +117,7 @@ def precision_score_torch(y_true: torch.Tensor, y_pred: torch.Tensor, num_classe
     # Return macro average of precision scores
     return sum(precisions) / num_classes
 
-def recall_score_torch(y_true: torch.Tensor, y_pred: torch.Tensor, num_classes: int) -> float:
+def recall_score_torch(y_true: torch.Tensor, y_pred_logits: torch.Tensor, num_classes: int) -> float:
     """
     Compute the recall score of a model.
     
@@ -103,6 +129,8 @@ def recall_score_torch(y_true: torch.Tensor, y_pred: torch.Tensor, num_classes: 
     Returns:
         float: Recall score
     """
+
+    y_pred = y_pred_logits.argmax(dim=1)
     
     # Initialize list to store recall scores for each class
     recalls = []
@@ -171,9 +199,10 @@ def plot_confusion_matrix(cm: torch.Tensor, class_names: list) -> None:
     plt.show()
 
 # Define dictionary of metrics
-METRICS = {
-    "Accuracy": accuracy_score_torch,
-    "F1": f1_score_torch,
-    "Precision": precision_score_torch,
-    "Recall": recall_score_torch,
-}
+# METRICS = {
+#     "Top-1 Accuracy": (topk_accuracy_torch, {"k": 1}),
+#     "Top-5 Accuracy": (topk_accuracy_torch, {"k": 5}),
+#     "F1": (f1_score_torch, {"num_classes": num_classes}),
+#     "Precision": (precision_score_torch, {"num_classes": num_classes}),
+#     "Recall": (recall_score_torch, {"num_classes": num_classes}),
+# }

@@ -6,8 +6,6 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 from typing import Callable, Optional
 
-from core.metrics import METRICS
-
 class Trainer:
     """
     Class for training a PyTorch model.
@@ -32,7 +30,7 @@ class Trainer:
         save: bool = False,
         checkpoint_fn: Callable[[int, float], None] = None,
         scheduler: Optional[optim.lr_scheduler.LRScheduler] = None,
-        metrics: Optional[list] = None,
+        metrics: Optional[dict] = None,
         num_classes: Optional[int] = None
     ) -> None:
         """
@@ -85,9 +83,10 @@ class Trainer:
 
         # Initialize metrics attribute
         if metrics:
-            self.metrics = {
-                name: METRICS[name] for name in metrics if name in METRICS
-            }
+            self.metrics = metrics
+            # self.metrics = {
+            #     name: METRICS[name] for name in metrics if name in METRICS
+            # }
         else:
             self.metrics = {}
         
@@ -116,7 +115,7 @@ class Trainer:
             
             # Initialize running loss and prediction tracking lists
             running_loss = 0.0
-            all_preds = []
+            all_outputs = []
             all_labels = []
 
             # Iterate over training data loader
@@ -134,24 +133,18 @@ class Trainer:
 
                 # Update running loss and prediction tracking lists
                 running_loss += loss.item()
-                _, predicted = torch.max(outputs, 1)
-                all_preds.append(predicted)
+                all_outputs.append(outputs)
                 all_labels.append(labels)
 
             # Update train loss and metric tracking lists
-            all_preds = torch.cat(all_preds)
+            all_outputs = torch.cat(all_outputs)
             all_labels = torch.cat(all_labels)
             self.train_loss.append(running_loss)
 
             # Compute and store metrics
-            metric_outputs = {}
-            for name, fn in self.metrics.items():
-                if fn.__code__.co_argcount == 3:
-                    score = fn(all_labels, all_preds, self.num_classes)
-                else:
-                    score = fn(all_labels, all_preds)
-                self.train_metrics[name].append(score)
-                metric_outputs[name] = score
+            metric_outputs = self._compute_metrics(all_labels, all_outputs)
+            for name, value in metric_outputs.items():
+                self.train_metrics[name].append(value)
 
             # Print training metrics
             metrics_str = " | ".join(f"{name}: {value:.4f}" for name, value in metric_outputs.items())
@@ -189,7 +182,7 @@ class Trainer:
         
         # Initialize running loss and prediction tracking lists
         running_loss = 0.0
-        all_preds = []
+        all_outputs = []
         all_labels = []
 
         # Iterate over data loader
@@ -205,27 +198,30 @@ class Trainer:
 
                 # Update running loss and prediction tracking lists
                 running_loss += loss.item()
-                _, predicted = torch.max(outputs, 1)
-                all_preds.append(predicted)
+                all_outputs.append(outputs)
                 all_labels.append(labels)
 
         # Update validation loss and metric tracking lists
-        all_preds = torch.cat(all_preds)
+        all_outputs = torch.cat(all_outputs)
         all_labels = torch.cat(all_labels)
         self.valid_loss.append(running_loss)
 
         # Compute and store metrics
-        metric_outputs = {}
-        for name, fn in self.metrics.items():
-            if fn.__code__.co_argcount == 3:
-                score = fn(all_labels, all_preds, self.num_classes)
-            else:
-                score = fn(all_labels, all_preds)
-            self.valid_metrics[name].append(score)
-            metric_outputs[name] = score
+        metric_outputs = self._compute_metrics(all_labels, all_outputs)
+        for name, value in metric_outputs.items():
+            self.valid_metrics[name].append(value)
 
         # Print validation metrics
         metrics_str = " | ".join(f"{name}: {value:.4f}" for name, value in metric_outputs.items())
         print(f"{'Validation':<12} | Loss: {running_loss:.4f} | {metrics_str}")
         
         return running_loss
+
+    def _compute_metrics(self, y_true, y_pred_logits):
+        metric_outputs = {}
+        for name, (func, params) in self.metrics.items():
+            score = func(y_true, y_pred_logits, **params)
+            metric_outputs[name] = score
+        return metric_outputs
+
+
