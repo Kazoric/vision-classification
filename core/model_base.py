@@ -16,6 +16,7 @@ from typing import Any, Dict, List, Optional, Tuple, Callable
 from core.trainer import Trainer
 from core.predictor import Predictor
 from core.checkpoint import CheckpointManager
+from core.metrics import topk_accuracy_torch
 
 class Model(ABC):
     """
@@ -48,7 +49,7 @@ class Model(ABC):
         optimizer_params: Optional[Dict[str, Any]] = None,
         scheduler_cls: Any = None,
         scheduler_params: Optional[Dict[str, Any]] = None,
-        metrics: Optional[dict[str, tuple[Callable, dict[str, Any]]]] = None,
+        metrics: dict[str, tuple[Callable, dict[str, Any]]] = {"Top-1 Accuracy": (topk_accuracy_torch, {"k": 1})},
         num_classes: Optional[int] = None,
         label_smoothing: float = 0
     ) -> None:

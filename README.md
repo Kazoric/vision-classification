@@ -10,7 +10,7 @@ This project provides a modular and extensible image classification framework us
   - `Predictor`: for single-batch or multi-batch inference
   - `Visualizer`: for plotting loss and metrics over epochs
 - Built-in support for metrics:
-  - **Accuracy**, **F1 Score**, **Precision**, **Recall**
+  - **Top-K Accuracy**, **F1 Score**, **Precision**, **Recall**
   - Implemented using **pure PyTorch** (no `sklearn`)
 - Configurable schedulers and optimizers via `run.py`
 - Resume training from checkpoints automatically
@@ -24,21 +24,58 @@ This project provides a modular and extensible image classification framework us
 - MobileNet
 - ResNet
 - Wide ResNet
+- ViT
 
 Each model file defines:
 - `Architecture`: the PyTorch `nn.Module` class
 - `Model`: a subclass of `ModelBase` that builds the architecture
 
+## 🗂️ Dataset Management
+
+This module provides a **flexible and unified data loading interface**, compatible with both standard torchvision datasets and your own custom datasets.
+
+### Supported Datasets
+
+- **Torchvision datasets** (e.g., `CIFAR10`, `CIFAR100`, `ImageNet`, `Imagenette`). These datasets are **automatically downloaded** to the specified directory to avoid repeated downloads.
+
+- **Custom datasets** following the [PyTorch ImageFolder](https://pytorch.org/vision/stable/generated/torchvision.datasets.ImageFolder.html) format. Simply organize your images into the standard folder structure, which is illustrated below, and the module will handle them automatically.
+
+```bash
+data/
+└── dataset/
+    ├── train/
+    │   ├── class_1/
+    │   │   ├── class_1_001.jpg
+    │   │   ├── class_1_002.jpg
+    │   │   └── ...
+    │   └── class_2/
+    │       ├── class_2_001.jpg
+    │       ├── class_2_002.jpg
+    │       └── ...
+    └── val/
+        ├── class_1/
+        │   ├── class_1_001.jpg
+        │   ├── class_1_002.jpg
+        │   └── ...
+        └── class_2/
+            ├── class_2_001.jpg
+            ├── class_2_002.jpg
+            └── ...
+```
+
 ## 📂 Project Structure
 
 ```bash
 .
+├── data/                      # Datasets (not tracked by Git)
+│   └── dataset/               # Your train/val folders or Torchvision downloads
 ├── models/
 │   ├── resnet.py               # ResNetArchitecture and ResNetModel
 │   ├── vgg.py                  # VGGArchitecture and VGGModel
 │   ├── densenet.py             # DenseNetArchitecture and DenseNetModel
 │   ├── mobilenet.py            # MobileNetArchitecture and MobileNetModel
-│   └── wide_resnet.py          # WideResNetArchitecture and WideResNetModel
+│   ├── wide_resnet.py          # WideResNetArchitecture and WideResNetModel
+│   └── vit.py                  # ViTArchitecture and ViTModel
 │
 ├── core/
 │   ├── model_base.py           # Base Model class (handles trainer, predictor, checkpoint)

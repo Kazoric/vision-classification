@@ -18,11 +18,11 @@ def main():
     learning_rate = 0.001
     scheduler = StepLR
     scheduler_params = {"step_size": 10, "gamma": 0.1}
-    num_epochs = 25
-    num_classes = 10
+    num_epochs = 10
+    num_classes = 2
     label_smoothing = 0.1
-    model_name = "ViT"
-    dataset_name = 'Cifar10'
+    model_name = "ResNet"
+    dataset_name = 'example'
     resume = False  # True to load a checkpoint if it exists
     if resume:
         run_id = 'ResNet_Imagenette_2025-10-19_17-28-16'
@@ -30,7 +30,7 @@ def main():
         run_id = None
     metrics = {
         "Top-1 Accuracy": (topk_accuracy_torch, {"k": 1}),
-        "Top-5 Accuracy": (topk_accuracy_torch, {"k": 5}),
+        #"Top-5 Accuracy": (topk_accuracy_torch, {"k": 5}),
         "F1": (f1_score_torch, {"num_classes": num_classes}),
         "Precision": (precision_score_torch, {"num_classes": num_classes}),
         "Recall": (recall_score_torch, {"num_classes": num_classes}),
@@ -48,32 +48,33 @@ def main():
 
 
     # 🧠 Model
-    # model = ResNetModel(lr=learning_rate, model_name=model_name, dataset_name=dataset_name, save=True,
-    #                     run_id=run_id, # needed to resume
-    #                     # optimizer_cls=optimizer,
-    #                     # optimizer_params=optimizer_params,
-    #                     scheduler_cls = scheduler,
-    #                     scheduler_params = scheduler_params,
-    #                     metrics=metrics,
-    #                     num_classes=num_classes,
-    #                     # label_smoothing=label_smoothing,
-    #                     layer_list=[2,2,2,2], block='Bottleneck'
-    #                     )
-    
-    model = ViTModel(
+    model = ResNetModel(
         lr=learning_rate, model_name=model_name, dataset_name=dataset_name, save=True,
         run_id=run_id, # needed to resume
         # optimizer_cls=optimizer,
         # optimizer_params=optimizer_params,
-        # scheduler_cls = scheduler,
-        # scheduler_params = scheduler_params,
+        scheduler_cls = scheduler,
+        scheduler_params = scheduler_params,
         metrics=metrics,
         num_classes=num_classes,
-        image_size=train_loader.dataset[0][0].shape[-1],
-        patch_size = 4,
-        depth = 4,
-        # label_smoothing=label_smoothing
+        # label_smoothing=label_smoothing,
+        layer_list=[2,2,2,2], block='Bottleneck'
     )
+    
+    # model = ViTModel(
+    #     lr=learning_rate, model_name=model_name, dataset_name=dataset_name, save=True,
+    #     run_id=run_id, # needed to resume
+    #     # optimizer_cls=optimizer,
+    #     # optimizer_params=optimizer_params,
+    #     # scheduler_cls = scheduler,
+    #     # scheduler_params = scheduler_params,
+    #     metrics=metrics,
+    #     num_classes=num_classes,
+    #     image_size=train_loader.dataset[0][0].shape[-1],
+    #     patch_size = 4,
+    #     depth = 4,
+    #     # label_smoothing=label_smoothing
+    # )
 
     # ♻️ Loading a checkpoint (optional)
     if resume:

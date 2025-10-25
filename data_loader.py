@@ -4,6 +4,12 @@ import torch
 from torchvision import datasets, transforms
 from torch.utils.data import DataLoader
 from typing import Tuple, Optional, List, Dict, Any
+import inspect
+
+
+def supports_download(dataset_class):
+    sig = inspect.signature(dataset_class.__init__)
+    return 'download' in sig.parameters
 
 # -------------------------------------------------
 # Utility to compute per‑channel mean & std
@@ -34,7 +40,10 @@ def compute_mean_std(
         transforms.Resize(image_size),
         transforms.ToTensor()
     ])
-    temp_train_set = dataset(root=root_dir, download=True, transform=transform)
+    if dataset == datasets.ImageFolder:
+        temp_train_set = dataset(root=root_dir, transform=transform)
+    else:
+        temp_train_set = dataset(root=root_dir, download=True, transform=transform)
     
     loader = DataLoader(temp_train_set, batch_size=batch_size, shuffle=False, num_workers=0)
 
@@ -121,8 +130,10 @@ def get_torchvision_dataset(
 
     config = DATASET_CONFIGS[dataset_name]
     dataset_class = config['class']
-    image_size = config['image_size']
     resize = config['resize']
+    if resize:
+        image_size = config['image_size']
+    root_dir = os.path.join(root_dir, dataset_name)
     os.makedirs(root_dir, exist_ok=True)
 
     # Create a temporary loader to compute stats if requested
@@ -136,19 +147,28 @@ def get_torchvision_dataset(
     train_transform, val_transform = get_transforms(image_size, resize, mean=mean, std=std)
 
     try:
-        train_set = dataset_class(
-            root=root_dir,
-            download=True,
-            transform=train_transform,
-            **config['train_args']
-        )
-        val_set = dataset_class(
-            root=root_dir,
-            download=True,
-            transform=val_transform,
-            **config['val_args']
-        )
+        if supports_download(dataset_class):
+            train_set = dataset_class(
+                root=root_dir,
+                download=True,
+                transform=train_transform,
+                **config['train_args']
+            )
+            val_set = dataset_class(
+                root=root_dir,
+                download=True,
+                transform=val_transform,
+                **config['val_args']
+            )
+        else:
+            # Dataset type ImageFolder ou custom local
+            train_root = os.path.join(root_dir, 'train')
+            val_root = os.path.join(root_dir, 'val')
+
+            train_set = dataset_class(root=train_root, transform=train_transform)
+            val_set = dataset_class(root=val_root, transform=val_transform)
         print(f"Dataset '{dataset_name}' loaded (downloaded if necessary) from '{root_dir}'.")
+
     except Exception as e:
         print(f"Error loading/downloading dataset {dataset_name}: {e}")
         raise
@@ -200,5 +220,12 @@ DATASET_CONFIGS = {
         'val_args': {'split': 'val'},
         'resize': True,
         'image_size': (224, 224)
+    },
+    'EXAMPLE': {
+        'class': datasets.ImageFolder,
+        'train_args': {'split': 'train'},
+        'val_args': {'split': 'val'},
+        'resize': True,
+        'image_size': (160, 160)
     }
 }
