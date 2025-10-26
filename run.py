@@ -18,11 +18,11 @@ def main():
     learning_rate = 0.001
     scheduler = StepLR
     scheduler_params = {"step_size": 10, "gamma": 0.1}
-    num_epochs = 10
-    num_classes = 2
+    num_epochs = 2
+    num_classes = 10
     label_smoothing = 0.1
     model_name = "ResNet"
-    dataset_name = 'example'
+    dataset_name = 'CIFAR10'
     resume = False  # True to load a checkpoint if it exists
     if resume:
         run_id = 'ResNet_Imagenette_2025-10-19_17-28-16'

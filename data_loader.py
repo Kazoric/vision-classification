@@ -131,8 +131,8 @@ def get_torchvision_dataset(
     config = DATASET_CONFIGS[dataset_name]
     dataset_class = config['class']
     resize = config['resize']
-    if resize:
-        image_size = config['image_size']
+    # if resize:
+    image_size = config['image_size']
     root_dir = os.path.join(root_dir, dataset_name)
     os.makedirs(root_dir, exist_ok=True)
 
