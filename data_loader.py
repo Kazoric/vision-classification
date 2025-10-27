@@ -15,10 +15,11 @@ def supports_download(dataset_class):
 # Utility to compute per‑channel mean & std
 # -------------------------------------------------
 def compute_mean_std(
-    dataset: torch.utils.data.Dataset,
+    dataset_class: torch.utils.data.Dataset,
     root_dir: str,
-    batch_size: int,
-    image_size: Tuple[int, int]
+    batch_size: int = 64,
+    image_size: Tuple[int, int] = (224, 224),
+    **dataset_kwargs
 ) -> Tuple[List[float], List[float]]:
     """
     Computes the per‑channel mean and standard deviation of a dataset.
@@ -40,12 +41,13 @@ def compute_mean_std(
         transforms.Resize(image_size),
         transforms.ToTensor()
     ])
-    if dataset == datasets.ImageFolder:
-        temp_train_set = dataset(root=root_dir, transform=transform)
+
+    if supports_download(dataset_class):
+        dataset = dataset_class(root=root_dir, download=True, transform=transform, **dataset_kwargs)
     else:
-        temp_train_set = dataset(root=root_dir, download=True, transform=transform)
-    
-    loader = DataLoader(temp_train_set, batch_size=batch_size, shuffle=False, num_workers=0)
+        dataset = dataset_class(root=root_dir, transform=transform, **dataset_kwargs)
+
+    loader = DataLoader(dataset, batch_size=batch_size, shuffle=False, num_workers=0)
 
     n_pixels = 0
     sum_ = torch.zeros(3)
@@ -69,7 +71,6 @@ def compute_mean_std(
 # -------------------------------------------------
 def get_transforms(
     image_size: Tuple[int, int] = (224,224),
-    resize: bool = False,
     mean: Optional[Tuple[float, float, float]] = None,
     std: Optional[Tuple[float, float, float]] = None
 ) -> Tuple[transforms.Compose, transforms.Compose]:
@@ -82,28 +83,31 @@ def get_transforms(
     if std is None:
         std = (0.229, 0.224, 0.225)
 
-    train_transform_list = []
-    val_transform_list = []
-    if resize:
-        train_transform_list.append(transforms.Resize(image_size))
-        val_transform_list.append(transforms.Resize(image_size))
-
-    train_transform_list.extend([
-        # transforms.Resize(image_size),   # Uncomment if you need resizing
-        transforms.RandomCrop(image_size, padding=image_size[0]//8),
+    train_transform = transforms.Compose([
+        transforms.Resize(image_size),
+        transforms.RandomCrop(image_size, padding=image_size[0] // 8),
         transforms.RandomHorizontalFlip(),
         transforms.RandomRotation(15),
         transforms.ToTensor(),
-        transforms.Normalize(mean=mean, std=std),
+        transforms.Normalize(mean, std),
     ])
 
-    val_transform_list.extend([
-        # transforms.Resize(image_size),
+    val_transform = transforms.Compose([
+        transforms.Resize(image_size),
         transforms.ToTensor(),
-        transforms.Normalize(mean=mean, std=std),
+        transforms.Normalize(mean, std),
     ])
 
-    return transforms.Compose(train_transform_list), transforms.Compose(val_transform_list)
+    return train_transform, val_transform
+
+def get_dataset_class(dataset_name: str):
+    """Try to fetch a torchvision dataset class by name."""
+    dataset_name = dataset_name.lower()
+    for name in dir(datasets):
+        cls = getattr(datasets, name)
+        if inspect.isclass(cls) and name.lower() == dataset_name:
+            return cls
+    raise ValueError(f"Dataset '{dataset_name}' not found in torchvision.datasets.")
 
 # -------------------------------------------------
 # Loading the dataset
@@ -113,61 +117,51 @@ def get_torchvision_dataset(
     root_dir: str = './data',
     batch_size: int = 64,
     num_workers: int = 0,
+    image_size: Tuple[int, int] = (224, 224),
     use_computed_stats: bool = False,
+    **dataset_kwargs
 ) -> Tuple[DataLoader, DataLoader]:
     """
-    Loads a standard torchvision dataset (e.g. CIFAR10, CIFAR100).
+    Generic dataset loader supporting both torchvision datasets (e.g. CIFAR10, CIFAR100) and ImageFolder.
     If *use_computed_stats* is ``True`` the function will compute
     the mean & std on the training split and use those for
     ``transforms.Normalize``.
     """
     dataset_name = dataset_name.upper()
 
-    if dataset_name not in DATASET_CONFIGS:
-        raise ValueError(
-            f"Dataset '{dataset_name}' not supported. Supported: {list(DATASET_CONFIGS.keys())}"
-        )
+    # Auto-load dataset class or fallback to ImageFolder
+    try:
+        dataset_class = get_dataset_class(dataset_name)
+    except ValueError:
+        print(f"[Info] Using ImageFolder for custom dataset '{dataset_name}'.")
+        dataset_class = datasets.ImageFolder
 
-    config = DATASET_CONFIGS[dataset_name]
-    dataset_class = config['class']
-    resize = config['resize']
-    # if resize:
-    image_size = config['image_size']
+    # Ensure dataset directory exists
     root_dir = os.path.join(root_dir, dataset_name)
     os.makedirs(root_dir, exist_ok=True)
 
-    # Create a temporary loader to compute stats if requested
+    # Compute mean/std if requested
     if use_computed_stats:
-        mean, std = compute_mean_std(dataset_class, root_dir, batch_size, image_size)
-        print(f"[Stats] {dataset_name} mean: {mean}, std: {std}")
+        mean, std = compute_mean_std(dataset_class, root_dir, batch_size, image_size, **dataset_kwargs)
+        print(f"[Stats] {dataset_name} mean={mean}, std={std}")
     else:
         mean, std = None, None
 
     # Build the actual transforms
-    train_transform, val_transform = get_transforms(image_size, resize, mean=mean, std=std)
+    train_transform, val_transform = get_transforms(image_size, mean, std)
 
     try:
+        # Create datasets
         if supports_download(dataset_class):
-            train_set = dataset_class(
-                root=root_dir,
-                download=True,
-                transform=train_transform,
-                **config['train_args']
-            )
-            val_set = dataset_class(
-                root=root_dir,
-                download=True,
-                transform=val_transform,
-                **config['val_args']
-            )
+            train_set = dataset_class(root=root_dir, download=True, transform=train_transform, **dataset_kwargs, train=True)
+            val_set = dataset_class(root=root_dir, download=True, transform=val_transform, **dataset_kwargs, train=False)
         else:
-            # Dataset type ImageFolder ou custom local
-            train_root = os.path.join(root_dir, 'train')
-            val_root = os.path.join(root_dir, 'val')
+            train_dir = os.path.join(root_dir, "train")
+            val_dir = os.path.join(root_dir, "val")
+            train_set = dataset_class(train_dir, transform=train_transform)
+            val_set = dataset_class(val_dir, transform=val_transform)
 
-            train_set = dataset_class(root=train_root, transform=train_transform)
-            val_set = dataset_class(root=val_root, transform=val_transform)
-        print(f"Dataset '{dataset_name}' loaded (downloaded if necessary) from '{root_dir}'.")
+        print(f"Loaded dataset '{dataset_name}' from '{root_dir}'.")
 
     except Exception as e:
         print(f"Error loading/downloading dataset {dataset_name}: {e}")
@@ -192,40 +186,40 @@ def get_torchvision_dataset(
     return train_loader, val_loader
 
 
-DATASET_CONFIGS = {
-    'CIFAR10': {
-        'class': datasets.CIFAR10,
-        'train_args': {'train': True},
-        'val_args': {'train': False},
-        'resize': False,
-        'image_size': (32, 32)
-    },
-    'CIFAR100': {
-        'class': datasets.CIFAR100,
-        'train_args': {'train': True},
-        'val_args': {'train': False},
-        'resize': False,
-        'image_size': (32, 32)
-    },
-    'IMAGENETTE': {
-        'class': datasets.Imagenette,
-        'train_args': {'split': 'train'},
-        'val_args': {'split': 'val'},
-        'resize': True,
-        'image_size': (160, 160)
-    },
-    'IMAGENET': {
-        'class': datasets.ImageNet,
-        'train_args': {'split': 'train'},
-        'val_args': {'split': 'val'},
-        'resize': True,
-        'image_size': (224, 224)
-    },
-    'EXAMPLE': {
-        'class': datasets.ImageFolder,
-        'train_args': {'split': 'train'},
-        'val_args': {'split': 'val'},
-        'resize': True,
-        'image_size': (160, 160)
-    }
-}
+# DATASET_CONFIGS = {
+#     'CIFAR10': {
+#         'class': datasets.CIFAR10,
+#         'train_args': {'train': True},
+#         'val_args': {'train': False},
+#         'resize': False,
+#         'image_size': (32, 32)
+#     },
+#     'CIFAR100': {
+#         'class': datasets.CIFAR100,
+#         'train_args': {'train': True},
+#         'val_args': {'train': False},
+#         'resize': False,
+#         'image_size': (32, 32)
+#     },
+#     'IMAGENETTE': {
+#         'class': datasets.Imagenette,
+#         'train_args': {'split': 'train'},
+#         'val_args': {'split': 'val'},
+#         'resize': True,
+#         'image_size': (160, 160)
+#     },
+#     'IMAGENET': {
+#         'class': datasets.ImageNet,
+#         'train_args': {'split': 'train'},
+#         'val_args': {'split': 'val'},
+#         'resize': True,
+#         'image_size': (224, 224)
+#     },
+#     'EXAMPLE': {
+#         'class': datasets.ImageFolder,
+#         'train_args': {'split': 'train'},
+#         'val_args': {'split': 'val'},
+#         'resize': True,
+#         'image_size': (160, 160)
+#     }
+# }

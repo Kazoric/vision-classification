@@ -22,7 +22,8 @@ def main():
     num_classes = 10
     label_smoothing = 0.1
     model_name = "ResNet"
-    dataset_name = 'CIFAR10'
+    dataset_name = 'cifar10'
+    image_size=(32,32)
     resume = False  # True to load a checkpoint if it exists
     if resume:
         run_id = 'ResNet_Imagenette_2025-10-19_17-28-16'
@@ -41,6 +42,7 @@ def main():
         dataset_name=dataset_name, 
         root_dir='./data', 
         batch_size=batch_size,
+        image_size=image_size,
         use_computed_stats=True
     )
     assert num_classes == len(train_loader.dataset.classes), \

@@ -88,3 +88,4 @@ data/
 ├── data_loader.py              # Loaders for CIFAR-10 and CIFAR-100
 ├── run.py                      # Main script to launch training/evaluation
 └── README.md                   # This file
+```
