@@ -28,11 +28,12 @@ class DepthwiseSeparableConv(nn.Module):
 
 
 class MobileNetArchitecture(nn.Module):
-    def __init__(self, num_class=100, use_batchnorm=True, width_multiplier=1.0):
+    def __init__(self, num_classes=100, use_batchnorm=True, width_multiplier=1.0, small_input=False):
         super().__init__()
         self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
         self.use_batchnorm = use_batchnorm
         self.width_multiplier = width_multiplier
+        self.small_input = small_input
 
         def c(ch):  # Apply width multiplier and ensure at least 1
             return max(1, int(ch * width_multiplier))
@@ -51,15 +52,21 @@ class MobileNetArchitecture(nn.Module):
         ]
 
         # Initial conv layer
-        in_channels = 3
+        if small_input:
+            first_channels = c(16)
+            first_stride = 1
+        else:
+            first_channels = c(32)
+            first_stride = 2
+
         layers = [
-            nn.Conv2d(in_channels, c(32), kernel_size=3, stride=2, padding=1, bias=False)
+            nn.Conv2d(3, first_channels, kernel_size=3, stride=first_stride, padding=1, bias=False)
         ]
         if use_batchnorm:
-            layers.append(nn.BatchNorm2d(c(32)))
+            layers.append(nn.BatchNorm2d(first_channels))
         layers.append(nn.ReLU(inplace=True))
 
-        in_channels = c(32)
+        in_channels = first_channels
 
         # Depthwise separable layers
         for out_channels, stride in self.cfg:
@@ -69,7 +76,7 @@ class MobileNetArchitecture(nn.Module):
         self.features = nn.Sequential(*layers)
 
         self.avgpool = nn.AdaptiveAvgPool2d(1)
-        self.classifier = nn.Linear(c(1024), num_class)
+        self.classifier = nn.Linear(c(1024), num_classes)
 
         self.to(self.device)
         self.apply(self.reset_weights)
@@ -93,18 +100,20 @@ class MobileNetArchitecture(nn.Module):
 
 
 class MobileNetModel(Model):
-    def __init__(self, num_classes=100, use_batchnorm=True, width_multiplier=1.0, **kwargs):
-        self.name = 'mobilenet'
+    def __init__(self, use_batchnorm=True, width_multiplier=1.0, image_size=(224,224), **kwargs):
+        self.name = 'MobileNet'
         self.width_multiplier = width_multiplier
         self.use_batchnorm = use_batchnorm
-        super().__init__(num_classes=num_classes, **kwargs)
+        self.small_input = image_size[0] <= 64
+        super().__init__(**kwargs)
 
     def build_model(self):
         # Tu peux configurer les paramètres du MobileNet ici
         return MobileNetArchitecture(
-            num_class=self.num_classes,
+            num_classes=self.num_classes,
             width_multiplier=self.width_multiplier,
-            use_batchnorm=self.use_batchnorm
+            use_batchnorm=self.use_batchnorm,
+            small_input=self.small_input
         )
     
     def get_model_specific_params(self):

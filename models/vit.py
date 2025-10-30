@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from typing import Tuple, Optional, List, Dict, Any
 
 from core.model_base import Model
 
@@ -133,7 +134,7 @@ class ViTModel(Model):
     def __init__(
         self,
         num_classes: int = 100,
-        image_size: int = 32,
+        image_size: Tuple[int, int] = (32, 32),
         patch_size: int = 4,
         embed_dim: int = 128,
         depth: int = 6,
@@ -142,10 +143,10 @@ class ViTModel(Model):
         dropout: float = 0.0,
         **kwargs,
     ):
-        self.name = "vit"
+        self.name = "ViT"
         self.params = {
             "num_classes": num_classes,
-            "image_size": image_size,
+            "image_size": image_size[0],
             "patch_size": patch_size,
             "embed_dim": embed_dim,
             "depth": depth,

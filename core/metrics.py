@@ -197,12 +197,3 @@ def plot_confusion_matrix(cm: torch.Tensor, class_names: list) -> None:
     
     # Show plot
     plt.show()
-
-# Define dictionary of metrics
-# METRICS = {
-#     "Top-1 Accuracy": (topk_accuracy_torch, {"k": 1}),
-#     "Top-5 Accuracy": (topk_accuracy_torch, {"k": 5}),
-#     "F1": (f1_score_torch, {"num_classes": num_classes}),
-#     "Precision": (precision_score_torch, {"num_classes": num_classes}),
-#     "Recall": (recall_score_torch, {"num_classes": num_classes}),
-# }

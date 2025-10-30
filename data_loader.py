@@ -116,7 +116,7 @@ def get_torchvision_dataset(
     dataset_name: str,
     root_dir: str = './data',
     batch_size: int = 64,
-    num_workers: int = 0,
+    num_workers: int = 4,
     image_size: Tuple[int, int] = (224, 224),
     use_computed_stats: bool = False,
     **dataset_kwargs
@@ -174,6 +174,8 @@ def get_torchvision_dataset(
         shuffle=True,
         num_workers=num_workers,
         pin_memory=True,
+        persistent_workers=True,
+        prefetch_factor=4
     )
     val_loader = DataLoader(
         val_set,
@@ -181,6 +183,8 @@ def get_torchvision_dataset(
         shuffle=False,
         num_workers=num_workers,
         pin_memory=True,
+        persistent_workers=True,
+        prefetch_factor=4
     )
 
     return train_loader, val_loader

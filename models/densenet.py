@@ -57,23 +57,30 @@ class TransitionLayer(nn.Module):
 
 
 class DenseNetArchitecture(nn.Module):
-    def __init__(self, num_class, block_config, growth_rate=32, compression=0.5, init_channels=64, dropout=0.1):
+    def __init__(self, num_class, block_config, growth_rate=32, compression=0.5, dropout=0.1, small_input=False):
         super(DenseNetArchitecture, self).__init__()
 
         self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
         self.num_class = num_class
         self.growth_rate = growth_rate
 
-        # Initial conv layer
-        self.init_channels = init_channels
-        self.features = nn.Sequential(
-            nn.Conv2d(3, init_channels, kernel_size=7, stride=2, padding=3, bias=False),
-            nn.BatchNorm2d(init_channels),
-            nn.ReLU(inplace=True),
-            nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
-        )
+        if small_input:
+            self.init_channels = 16
+            self.features = nn.Sequential(
+                nn.Conv2d(3, self.init_channels, kernel_size=3, stride=1, padding=1, bias=False),
+                nn.BatchNorm2d(self.init_channels),
+                nn.ReLU(inplace=True)
+            )
+        else:
+            self.init_channels = 64
+            self.features = nn.Sequential(
+                nn.Conv2d(3, self.init_channels, kernel_size=7, stride=2, padding=3, bias=False),
+                nn.BatchNorm2d(self.init_channels),
+                nn.ReLU(inplace=True),
+                nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
+            )
 
-        num_channels = init_channels
+        num_channels = self.init_channels
         self.blocks = nn.ModuleList()
 
         for i, num_layers in enumerate(block_config):
@@ -118,14 +125,14 @@ class DenseNetArchitecture(nn.Module):
 
 
 class DenseNetModel(Model):
-    def __init__(self, num_classes=100, block_config=[6, 12, 24, 16], growth_rate=32, compression=0.5, init_channels=64, dropout=0.1, **kwargs):
-        self.name = 'densenet'
+    def __init__(self, block_config=[6, 12, 24, 16], growth_rate=32, compression=0.5, dropout=0.1, image_size=(224, 224), **kwargs):
+        self.name = 'DenseNet'
         self.block_config = block_config
         self.growth_rate = growth_rate
         self.compression = compression
-        self.init_channels = init_channels
         self.dropout = dropout
-        super().__init__(num_classes=num_classes, **kwargs)
+        self.small_input = image_size[0] <= 64
+        super().__init__(**kwargs)
 
     def build_model(self):
         print(f"Building DenseNet with block config: {self.block_config}, growth_rate: {self.growth_rate}")
@@ -134,8 +141,8 @@ class DenseNetModel(Model):
             block_config=self.block_config,
             growth_rate=self.growth_rate,
             compression=self.compression,
-            init_channels=self.init_channels,
-            dropout=self.dropout
+            dropout=self.dropout,
+            small_input=self.small_input
         )
     
     def get_model_specific_params(self):
@@ -144,6 +151,5 @@ class DenseNetModel(Model):
             "block_config": self.block_config,
             "growth_rate": self.growth_rate,
             "compression": self.compression,
-            "init_channels": self.init_channels,
             "dropout": self.dropout,
         }

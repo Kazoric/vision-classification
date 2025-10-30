@@ -1,7 +1,8 @@
-# Import necessary libraries
 import matplotlib.pyplot as plt
+import seaborn as sns
 import os
 from typing import Optional
+import torch
 
 from core.trainer import Trainer
 
@@ -76,4 +77,32 @@ class Visualizer:
                 plt.savefig(save_path)
                 print(f"Training curves saved to {save_path}")
         print()
+        plt.show()
+
+    def plot_confusion_matrix(self, cm: torch.Tensor, class_names: list, run_id: str, save: Optional[bool] = True):
+        """
+        Plot and optionally save the confusion matrix.
+        
+        Args:
+            cm (torch.Tensor): Confusion matrix
+            class_names (list): List of class names
+            run_id (str): Unique identifier for the experiment
+            save (bool, optional): Whether to save the plot (default: True)
+        """
+        plt.figure(figsize=(8, 6))
+        sns.heatmap(cm.cpu().numpy(), annot=True, fmt='d', cmap='Blues',
+                    xticklabels=class_names, yticklabels=class_names)
+
+        plt.xlabel('Predicted')
+        plt.ylabel('True')
+        plt.title('Confusion Matrix')
+        plt.tight_layout()
+
+        if save:
+            save_dir = f"experiments/{run_id}/plots"
+            os.makedirs(save_dir, exist_ok=True)
+            save_path = os.path.join(save_dir, "confusion_matrix.png")
+            plt.savefig(save_path, bbox_inches='tight', dpi=300)
+            print(f"Confusion matrix saved to {save_path}")
+
         plt.show()

@@ -33,7 +33,7 @@ class Model(ABC):
         optimizer_params (dict): Parameters for the optimizer
         scheduler_cls (class): Class of the scheduler to use
         scheduler_params (dict): Parameters for the scheduler
-        metrics (list): List of evaluation metrics to track
+        metrics (dict): Dict of evaluation metrics to track
         num_classes (int): Number of classes in the dataset
     """
     
@@ -74,18 +74,17 @@ class Model(ABC):
         # Set device to CPU or GPU if available
         self.device = device or ('cuda' if torch.cuda.is_available() else 'cpu')
 
-        # Generate run ID if not provided
-        if run_id is None:
-            date = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-            run_id = f"{model_name}_{dataset_name}_{date}"
-        
-        self.run_id = run_id
-
         # Set number of classes
         self.num_classes = num_classes
         
         # Build and move model to device
         self.model = self.build_model().to(self.device)
+
+        # Generate run ID if not provided
+        if run_id is None:
+            date = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+            run_id = f"{self.name}_{dataset_name}_{date}"
+        self.run_id = run_id
         
         # Initialize criterion (cross-entropy loss with label smoothing)
         self.criterion = nn.CrossEntropyLoss(label_smoothing=label_smoothing)
@@ -122,7 +121,7 @@ class Model(ABC):
             model=self.model,
             optimizer=self.optimizer,
             run_id=run_id,
-            model_name=model_name
+            model_name=self.name
         )
 
         # Initialize trainer
@@ -251,6 +250,7 @@ class Model(ABC):
         meta = {
             "model_name": self.name,
             "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "num_classes": self.num_classes,
             "batch_size": batch_size,
             "learning_rate": self.lr,
             "num_epochs": num_epochs,

@@ -23,7 +23,7 @@ class BasicBlock(nn.Module):
         self.a = nn.Parameter(torch.tensor(0.0))
 
     def forward(self, x):
-        identity = x.clone()
+        identity = x
 
         x = torch.relu(self.batch_norm1(self.conv1(x)))
         x = self.batch_norm2(self.conv2(x))
@@ -31,8 +31,8 @@ class BasicBlock(nn.Module):
         if self.i_downsample is not None:
             identity = self.i_downsample(identity)
 
-        x += self.dropout(self.a * identity)
-        # x += identity
+        x = self.dropout(x)
+        x += self.a * identity
         x = torch.relu(x)
 
         return x
@@ -58,7 +58,7 @@ class BottleneckBlock(nn.Module):
         self.dropout = nn.Dropout(dropout)
 
     def forward(self, x):
-        identity = x.clone()
+        identity = x
         x = torch.relu(self.batch_norm1(self.conv1(x)))
         
         x = torch.relu(self.batch_norm2(self.conv2(x)))
@@ -70,15 +70,15 @@ class BottleneckBlock(nn.Module):
         if self.i_downsample is not None:
             identity = self.i_downsample(identity)
         # add identity
-        x += self.dropout(self.a*identity)
-        # x += identity
+        x = self.dropout(x)
+        x += self.a * identity
         x = torch.relu(x)
         
         return x
 
     
 class WideResNetArchitecture(nn.Module):
-    def __init__(self, num_class, layer_list, block=BottleneckBlock, widen_factor=2, **param):
+    def __init__(self, num_class, layer_list, block=BottleneckBlock, widen_factor=2, small_input=False, dropout=0.1, **param):
         super(WideResNetArchitecture, self).__init__()
         self.block = block
         self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -89,34 +89,31 @@ class WideResNetArchitecture(nn.Module):
         # Model hyperparameters
         self.layer_list = layer_list
 
-        self.in_channels = 64
+        if small_input:
+            self.in_channels = 16
+            self.conv1 = nn.Conv2d(3, 16, kernel_size=3, stride=1, padding=1, bias=False)
+            self.max_pool = nn.Identity()
+        else:
+            self.in_channels = 64
+            self.conv1 = nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3, bias=False)
+            self.max_pool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
+
+        self.batch_norm1 = nn.BatchNorm2d(self.in_channels)
         
-        self.conv1 = nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3, bias=False)
-        self.batch_norm1 = nn.BatchNorm2d(64)
-        # self.relu = nn.ReLU()
-        self.max_pool = nn.MaxPool2d(kernel_size = 3, stride=2, padding=1)
-        
-        # self.layer1 = self._make_layer(self.block, self.layer_list[0], planes=64)
-        # self.layer2 = self._make_layer(self.block, self.layer_list[1], planes=128, stride=2)
-        # self.layer3 = self._make_layer(self.block, self.layer_list[2], planes=256, stride=2)
-        # self.layer4 = self._make_layer(self.block, self.layer_list[3], planes=512, stride=2)
         self.layers = nn.ModuleList()
-        planes = 64 * widen_factor
+        planes = (16 if small_input else 64) * widen_factor
 
         for i, num_blocks in enumerate(self.layer_list):
             stride = 1 if i == 0 else 2
-            layer = self._make_layer(self.block, num_blocks, planes, stride=stride)
+            layer = self._make_layer(self.block, num_blocks, planes, stride=stride, dropout=dropout)
             self.layers.append(layer)
-            self.in_channels = planes * self.block.expansion
             planes *= 2
-        final_planes = planes // 2
         
         self.avgpool = nn.AdaptiveAvgPool2d((1,1))
-        self.fc = nn.Linear(final_planes*self.block.expansion, self.num_class)
-
-        self.to(self.device)
+        self.fc = nn.Linear(self.in_channels, self.num_class)
 
         self.apply(self.reset_weights)
+        self.to(self.device)
     
     def reset_weights(self, m):
         """
@@ -138,10 +135,6 @@ class WideResNetArchitecture(nn.Module):
         x = torch.relu(self.batch_norm1(self.conv1(x)))
         x = self.max_pool(x)
 
-        # x = self.layer1(x)
-        # x = self.layer2(x)
-        # x = self.layer3(x)
-        # x = self.layer4(x)
         for layer in self.layers:
             x = layer(x)
 
@@ -152,39 +145,41 @@ class WideResNetArchitecture(nn.Module):
         
         return x
         
-    def _make_layer(self, block, blocks, planes, stride=1):
-        ii_downsample = None
+    def _make_layer(self, block, blocks, planes, stride=1, dropout=0.1):
+        downsample = None
         layers = []
         
         if stride != 1 or self.in_channels != planes*block.expansion:
-            ii_downsample = nn.Sequential(
+            downsample = nn.Sequential(
                 nn.Conv2d(self.in_channels, planes*block.expansion, kernel_size=1, stride=stride),
                 nn.BatchNorm2d(planes*block.expansion)
             )
             
-        layers.append(block(self.in_channels, planes, i_downsample=ii_downsample, stride=stride))
+        layers.append(block(self.in_channels, planes, i_downsample=downsample, stride=stride, dropout=dropout))
         self.in_channels = planes*block.expansion
         
         for i in range(blocks-1):
-            layers.append(block(self.in_channels, planes))
+            layers.append(block(self.in_channels, planes, dropout=dropout))
             
         return nn.Sequential(*layers)
     
 
 
 class WideResNetModel(Model):
-    def __init__(self, num_classes=100, layer_list=[3, 4, 6, 3], block='Bottleneck', widen_factor=1, **kwargs):
-        self.name = 'wide_resnet'
+    def __init__(self, layer_list=[3, 4, 6, 3], block='Bottleneck', widen_factor=2, image_size=(224,224), dropout=0.1, **kwargs):
+        self.name = 'WideResNet'
         self.layer_list = layer_list
         self.widen_factor = widen_factor
         self.block_str = block
+        self.small_input = image_size[0] <= 64
+        self.dropout = dropout
         if block == 'Bottleneck':
             self.block = BottleneckBlock
         elif block == 'Basic':
             self.block = BasicBlock
         else:
             raise ValueError(f"Unknown block type: {block}")
-        super().__init__(num_classes=num_classes, **kwargs)
+        super().__init__(**kwargs)
 
     def build_model(self):
         print(f"Building WideResNet with {len(self.layer_list)} stages: {self.layer_list} and widen factor {self.widen_factor}")
@@ -192,7 +187,9 @@ class WideResNetModel(Model):
             num_class=self.num_classes,
             layer_list=self.layer_list,
             block=self.block,
-            widen_factor=self.widen_factor
+            widen_factor=self.widen_factor,
+            small_input=self.small_input,
+            dropout=self.dropout
         )
     
     def get_model_specific_params(self):
@@ -200,5 +197,6 @@ class WideResNetModel(Model):
             "num_classes": self.num_classes,
             "layer_list": self.layer_list,
             "block": self.block_str,
-            "widen_factor": self.widen_factor
+            "widen_factor": self.widen_factor,
+            "dropout": self.dropout
         }

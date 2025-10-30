@@ -13,10 +13,10 @@ class VGGArchitecture(nn.Module):
                   512, 512, 512, 512, 'M', 512, 512, 512, 512, 'M']
     }
 
-    def __init__(self, num_class=100, variant='VGG16', use_batchnorm=True, **kwargs):
+    def __init__(self, num_classes=100, variant='VGG16', use_batchnorm=True, **kwargs):
         super(VGGArchitecture, self).__init__()
         self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
-        self.num_class = num_class
+        self.num_classes = num_classes
         self.variant = variant.upper()
         self.use_batchnorm = use_batchnorm
 
@@ -28,13 +28,13 @@ class VGGArchitecture(nn.Module):
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))  # Optionally (7, 7) for ImageNet
 
         self.classifier = nn.Sequential(
-            nn.Linear(512, 512),
-            nn.ReLU(True),
-            nn.Dropout(),
-            nn.Linear(512, 512),
-            nn.ReLU(True),
-            nn.Dropout(),
-            nn.Linear(512, num_class)
+            # nn.Linear(512, 512),
+            # nn.ReLU(True),
+            # nn.Dropout(),
+            # nn.Linear(512, 512),
+            # nn.ReLU(True),
+            # nn.Dropout(),
+            nn.Linear(512, num_classes)
         )
 
         self.to(self.device)
@@ -76,17 +76,17 @@ class VGGArchitecture(nn.Module):
 
 
 class VGGModel(Model):
-    def __init__(self, num_classes=100, variant='VGG16', use_batchnorm=True, **kwargs):
-        self.name = 'vgg'
+    def __init__(self, variant='VGG16', use_batchnorm=True, **kwargs):
+        self.name = 'VGG'
         self.variant = variant
         self.use_batchnorm = use_batchnorm
-        super().__init__(num_classes=num_classes, **kwargs)
+        super().__init__(**kwargs)
 
     def build_model(self):
         print(f"Building {self.variant}")
         # Tu peux configurer les paramètres du VGG ici
         return VGGArchitecture(
-            num_class=self.num_classes,
+            num_classes=self.num_classes,
             variant=self.variant,
             use_batchnorm=self.use_batchnorm
         )
