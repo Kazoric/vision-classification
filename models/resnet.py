@@ -169,7 +169,8 @@ class ResNetModel(Model):
         self.name = 'ResNet'
         self.layer_list = layer_list
         self.block_str = block
-        self.small_input = image_size[0] <= 64
+        self.image_size = image_size
+        self.small_input = self.image_size[0] <= 64
         self.dropout = dropout
 
         if block == 'Bottleneck':
@@ -194,6 +195,7 @@ class ResNetModel(Model):
     def get_model_specific_params(self):
         return {
             "num_classes": self.num_classes,
+            "image_size": self.image_size,
             "layer_list": self.layer_list,
             "block": self.block_str,
             "dropout": self.dropout

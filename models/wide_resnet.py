@@ -171,7 +171,8 @@ class WideResNetModel(Model):
         self.layer_list = layer_list
         self.widen_factor = widen_factor
         self.block_str = block
-        self.small_input = image_size[0] <= 64
+        self.image_size = image_size
+        self.small_input = self.image_size[0] <= 64
         self.dropout = dropout
         if block == 'Bottleneck':
             self.block = BottleneckBlock
@@ -195,6 +196,7 @@ class WideResNetModel(Model):
     def get_model_specific_params(self):
         return {
             "num_classes": self.num_classes,
+            "image_size": self.image_size,
             "layer_list": self.layer_list,
             "block": self.block_str,
             "widen_factor": self.widen_factor,

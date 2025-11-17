@@ -56,8 +56,8 @@ class ViTArchitecture(nn.Module):
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
 
         # Calculate number of patches
-        assert image_size % patch_size == 0, "Image size must be divisible by patch size."
-        self.num_patches = (image_size // patch_size) ** 2
+        assert image_size[0] % patch_size == 0, "Image size must be divisible by patch size."
+        self.num_patches = (image_size[0] // patch_size) ** 2
 
         # Patch embedding
         self.patch_embed = nn.Conv2d(
@@ -146,7 +146,7 @@ class ViTModel(Model):
         self.name = "ViT"
         self.params = {
             "num_classes": num_classes,
-            "image_size": image_size[0],
+            "image_size": image_size,
             "patch_size": patch_size,
             "embed_dim": embed_dim,
             "depth": depth,

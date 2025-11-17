@@ -5,6 +5,7 @@ from torchvision import datasets, transforms
 from torch.utils.data import DataLoader
 from typing import Tuple, Optional, List, Dict, Any
 import inspect
+import json
 
 
 def supports_download(dataset_class):
@@ -47,7 +48,7 @@ def compute_mean_std(
     else:
         dataset = dataset_class(root=root_dir, transform=transform, **dataset_kwargs)
 
-    loader = DataLoader(dataset, batch_size=batch_size, shuffle=False, num_workers=0)
+    loader = DataLoader(dataset, batch_size=batch_size, shuffle=False, num_workers=4)
 
     n_pixels = 0
     sum_ = torch.zeros(3)
@@ -140,9 +141,20 @@ def get_torchvision_dataset(
     root_dir = os.path.join(root_dir, dataset_name)
     os.makedirs(root_dir, exist_ok=True)
 
+    stats_path = os.path.join(root_dir, "stats.json")
+    
     # Compute mean/std if requested
     if use_computed_stats:
-        mean, std = compute_mean_std(dataset_class, root_dir, batch_size, image_size, **dataset_kwargs)
+        if os.path.exists(stats_path):
+            print(f"[Stats] Loading existing stats from {stats_path}")
+            with open(stats_path, "r") as f:
+                stats = json.load(f)
+            mean, std = stats["mean"], stats["std"]
+        else:
+            mean, std = compute_mean_std(dataset_class, root_dir, batch_size, image_size, **dataset_kwargs)
+            stats = {'mean': mean, 'std': std}
+            with open(stats_path, "w") as f:
+                json.dump(stats, f, indent=4)
         print(f"[Stats] {dataset_name} mean={mean}, std={std}")
     else:
         mean, std = None, None
@@ -157,7 +169,7 @@ def get_torchvision_dataset(
             val_set = dataset_class(root=root_dir, download=True, transform=val_transform, **dataset_kwargs, train=False)
         else:
             train_dir = os.path.join(root_dir, "train")
-            val_dir = os.path.join(root_dir, "val")
+            val_dir = os.path.join(root_dir, "valid")
             train_set = dataset_class(train_dir, transform=train_transform)
             val_set = dataset_class(val_dir, transform=val_transform)
 

@@ -18,16 +18,16 @@ def main():
     optimizer = optim.SGD
     optimizer_params = {"momentum": 0.9, "weight_decay": 5e-4}
     batch_size = 128
-    learning_rate = 0.1
+    learning_rate = 0.001
     # scheduler = StepLR
     # scheduler_params = {"step_size": 10, "gamma": 0.1}
     scheduler = CosineAnnealingLR
-    scheduler_params = {"T_max": 20}
-    num_epochs = 20
+    scheduler_params = {"T_max": 50}
+    num_epochs = 50
     num_classes = 10
     label_smoothing = 0.1
     model_name = "ResNet"
-    dataset_name = 'cifar10'
+    dataset_name = 'CINIC-10'
     image_size=(32,32)
     resume = False  # True to load a checkpoint if it exists
     if resume:
@@ -55,34 +55,34 @@ def main():
 
 
     # 🧠 Model
-    model = ResNetModel(
-        lr=learning_rate, model_name=model_name, dataset_name=dataset_name, save=True,
-        run_id=run_id, # needed to resume
-        optimizer_cls=optimizer,
-        optimizer_params=optimizer_params,
-        scheduler_cls = scheduler,
-        scheduler_params = scheduler_params,
-        metrics=metrics,
-        num_classes=num_classes,
-        # label_smoothing=label_smoothing,
-        layer_list=[2,2,2,2], block='Basic', dropout=0.0,
-        image_size=(32,32)
-    )
-    
-    # model = ViTModel(
+    # model = ResNetModel(
     #     lr=learning_rate, model_name=model_name, dataset_name=dataset_name, save=True,
     #     run_id=run_id, # needed to resume
     #     # optimizer_cls=optimizer,
     #     # optimizer_params=optimizer_params,
-    #     # scheduler_cls = scheduler,
-    #     # scheduler_params = scheduler_params,
+    #     scheduler_cls = scheduler,
+    #     scheduler_params = scheduler_params,
     #     metrics=metrics,
     #     num_classes=num_classes,
-    #     image_size=image_size,
-    #     patch_size = 4,
-    #     depth = 4,
-    #     # label_smoothing=label_smoothing
+    #     # label_smoothing=label_smoothing,
+    #     layer_list=[2,2,2,2], block='Basic', dropout=0.0,
+    #     image_size=(32,32)
     # )
+    
+    model = ViTModel(
+        lr=learning_rate, model_name=model_name, dataset_name=dataset_name, save=True,
+        run_id=run_id, # needed to resume
+        # optimizer_cls=optimizer,
+        # optimizer_params=optimizer_params,
+        scheduler_cls = scheduler,
+        scheduler_params = scheduler_params,
+        metrics=metrics,
+        num_classes=num_classes,
+        image_size=image_size,
+        patch_size = 4,
+        depth = 4,
+        # label_smoothing=label_smoothing
+    )
 
     # model = MobileNetModel(
     #     lr=learning_rate, model_name=model_name, dataset_name=dataset_name, save=True,

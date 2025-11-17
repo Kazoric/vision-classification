@@ -131,7 +131,8 @@ class DenseNetModel(Model):
         self.growth_rate = growth_rate
         self.compression = compression
         self.dropout = dropout
-        self.small_input = image_size[0] <= 64
+        self.image_size = image_size
+        self.small_input = self.image_size[0] <= 64
         super().__init__(**kwargs)
 
     def build_model(self):
@@ -148,6 +149,7 @@ class DenseNetModel(Model):
     def get_model_specific_params(self):
         return {
             "num_classes": self.num_classes,
+            "image_size": self.image_size,
             "block_config": self.block_config,
             "growth_rate": self.growth_rate,
             "compression": self.compression,

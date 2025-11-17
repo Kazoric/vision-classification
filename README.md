@@ -69,6 +69,7 @@ data/
 .
 ├── data/                      # Datasets (not tracked by Git)
 │   └── dataset/               # Your train/val folders or Torchvision downloads
+│
 ├── models/
 │   ├── resnet.py               # ResNetArchitecture and ResNetModel
 │   ├── vgg.py                  # VGGArchitecture and VGGModel

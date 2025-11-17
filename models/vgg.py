@@ -76,10 +76,11 @@ class VGGArchitecture(nn.Module):
 
 
 class VGGModel(Model):
-    def __init__(self, variant='VGG16', use_batchnorm=True, **kwargs):
+    def __init__(self, variant='VGG16', use_batchnorm=True, image_size=(224, 224), **kwargs):
         self.name = 'VGG'
         self.variant = variant
         self.use_batchnorm = use_batchnorm
+        self.image_size = image_size
         super().__init__(**kwargs)
 
     def build_model(self):
@@ -94,6 +95,7 @@ class VGGModel(Model):
     def get_model_specific_params(self):
         return {
             "num_classes": self.num_classes,
+            "image_size": self.image_size,
             "variant": self.variant,
             "use_batchnorm": self.use_batchnorm,
         }

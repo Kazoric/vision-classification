@@ -104,7 +104,8 @@ class MobileNetModel(Model):
         self.name = 'MobileNet'
         self.width_multiplier = width_multiplier
         self.use_batchnorm = use_batchnorm
-        self.small_input = image_size[0] <= 64
+        self.image_size = image_size
+        self.small_input = self.image_size[0] <= 64
         super().__init__(**kwargs)
 
     def build_model(self):
@@ -119,6 +120,7 @@ class MobileNetModel(Model):
     def get_model_specific_params(self):
         return {
             "num_classes": self.num_classes,
+            "image_size": self.image_size,
             "width_multiplier": self.width_multiplier,
             "use_batchnorm": self.use_batchnorm,
         }
