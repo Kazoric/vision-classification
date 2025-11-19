@@ -9,21 +9,24 @@ from models.mobilenet import MobileNetModel
 from models.vgg import VGGModel
 from models.wide_resnet import WideResNetModel
 from models.vit import ViTModel
+from models.convnext import ConvNeXtModel
 from data_loader import get_torchvision_dataset
 from core.visualizer import Visualizer
 from core.metrics import topk_accuracy_torch, f1_score_torch, precision_score_torch, recall_score_torch, confusion_matrix_torch, plot_confusion_matrix
 
 def main():
     # 🔧 Hyperparameters
-    optimizer = optim.SGD
-    optimizer_params = {"momentum": 0.9, "weight_decay": 5e-4}
+    # optimizer = optim.SGD
+    # optimizer_params = {"momentum": 0.9, "weight_decay": 5e-4}
+    optimizer = optim.AdamW
+    optimizer_params = {"weight_decay": 5e-4}
     batch_size = 512
-    learning_rate = 0.1
+    learning_rate = 0.001
     # scheduler = StepLR
     # scheduler_params = {"step_size": 10, "gamma": 0.1}
     scheduler = CosineAnnealingLR
-    scheduler_params = {"T_max": 200}
-    num_epochs = 200
+    scheduler_params = {"T_max": 20}
+    num_epochs = 20
     num_classes = 10
     label_smoothing = 0.1
     dataset_name = 'cifar10'
@@ -83,6 +86,19 @@ def main():
     #     label_smoothing=label_smoothing
     # )
 
+    model = ConvNeXtModel(
+        lr=learning_rate, dataset_name=dataset_name, save=True,
+        run_id=run_id, # needed to resume
+        optimizer_cls=optimizer,
+        optimizer_params=optimizer_params,
+        scheduler_cls = scheduler,
+        scheduler_params = scheduler_params,
+        metrics=metrics,
+        num_classes=num_classes,
+        image_size=image_size,
+        label_smoothing=label_smoothing
+    )
+
     # model = MobileNetModel(
     #     lr=learning_rate, dataset_name=dataset_name, save=True,
     #     run_id=run_id, # needed to resume
@@ -124,18 +140,18 @@ def main():
     #     layer_list=[4, 4, 4], block='Basic', widen_factor=4, image_size=(32,32)
     # )
 
-    model = VGGModel(
-        lr=learning_rate, dataset_name=dataset_name, save=True,
-        run_id=run_id, # needed to resume
-        optimizer_cls=optimizer,
-        optimizer_params=optimizer_params,
-        scheduler_cls = scheduler,
-        scheduler_params = scheduler_params,
-        metrics=metrics,
-        num_classes=num_classes,
-        label_smoothing=label_smoothing,
-        image_size=image_size
-    )
+    # model = VGGModel(
+    #     lr=learning_rate, dataset_name=dataset_name, save=True,
+    #     run_id=run_id, # needed to resume
+    #     optimizer_cls=optimizer,
+    #     optimizer_params=optimizer_params,
+    #     scheduler_cls = scheduler,
+    #     scheduler_params = scheduler_params,
+    #     metrics=metrics,
+    #     num_classes=num_classes,
+    #     label_smoothing=label_smoothing,
+    #     image_size=image_size
+    # )
 
     # ♻️ Loading a checkpoint (optional)
     if resume:
