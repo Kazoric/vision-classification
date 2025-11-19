@@ -42,7 +42,6 @@ class Model(ABC):
         device: Optional[str] = None,
         lr: float = 0.001,
         save: bool = False,
-        model_name: str = "model",
         dataset_name: str = "unknown",
         run_id: Optional[str] = None,
         optimizer_cls: Any = None,
@@ -60,7 +59,6 @@ class Model(ABC):
             device (str): Device to use for training and inference
             lr (float): Initial learning rate
             save (bool): Whether to save model checkpoints during training
-            model_name (str): Name of the model
             dataset_name (str): Name of the dataset used to train the model
             run_id (str): Unique identifier for the current experiment
             optimizer_cls (class): Class of the optimizer to use
@@ -217,7 +215,7 @@ class Model(ABC):
         y_true = torch.cat(all_labels)
         return y_true, y_pred.cpu()
 
-    def load_checkpoint(self) -> None:
+    def load_checkpoint(self, load_optimizer: bool = True) -> None:
         """
         Load the latest checkpoint.
         
@@ -225,7 +223,7 @@ class Model(ABC):
             bool: Whether loading was successful
         """
         
-        success = self.checkpoint.load_latest()
+        success = self.checkpoint.load_latest(load_optimizer)
         if success:
             self.trainer.start_epoch = self.checkpoint.start_epoch
             self.trainer.best_val_loss = self.checkpoint.best_val_loss

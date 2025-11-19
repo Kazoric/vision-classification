@@ -84,7 +84,7 @@ class CheckpointManager:
         self.best_val_loss = val_loss
         self.start_epoch = epoch
 
-    def load_latest(self) -> bool:
+    def load_latest(self, load_optimizer = True) -> bool:
         """
         Load the latest checkpoint (based on val_loss minimum).
         
@@ -117,7 +117,8 @@ class CheckpointManager:
 
         # Load model and optimizer state dictionaries
         self.model.load_state_dict(checkpoint['model_state_dict'])
-        self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        if load_optimizer:
+            self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
         
         # Update metadata
         self.start_epoch = checkpoint['epoch']
