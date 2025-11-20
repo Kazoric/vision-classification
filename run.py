@@ -25,8 +25,8 @@ def main():
     # scheduler = StepLR
     # scheduler_params = {"step_size": 10, "gamma": 0.1}
     scheduler = CosineAnnealingLR
-    scheduler_params = {"T_max": 20}
-    num_epochs = 20
+    scheduler_params = {"T_max": 5}
+    num_epochs = 5
     num_classes = 10
     label_smoothing = 0.1
     dataset_name = 'cifar10'
@@ -86,18 +86,18 @@ def main():
     #     label_smoothing=label_smoothing
     # )
 
-    model = ConvNeXtModel(
-        lr=learning_rate, dataset_name=dataset_name, save=True,
-        run_id=run_id, # needed to resume
-        optimizer_cls=optimizer,
-        optimizer_params=optimizer_params,
-        scheduler_cls = scheduler,
-        scheduler_params = scheduler_params,
-        metrics=metrics,
-        num_classes=num_classes,
-        image_size=image_size,
-        label_smoothing=label_smoothing
-    )
+    # model = ConvNeXtModel(
+    #     lr=learning_rate, dataset_name=dataset_name, save=True,
+    #     run_id=run_id, # needed to resume
+    #     optimizer_cls=optimizer,
+    #     optimizer_params=optimizer_params,
+    #     scheduler_cls = scheduler,
+    #     scheduler_params = scheduler_params,
+    #     metrics=metrics,
+    #     num_classes=num_classes,
+    #     image_size=image_size,
+    #     label_smoothing=label_smoothing
+    # )
 
     # model = MobileNetModel(
     #     lr=learning_rate, dataset_name=dataset_name, save=True,
@@ -140,18 +140,18 @@ def main():
     #     layer_list=[4, 4, 4], block='Basic', widen_factor=4, image_size=(32,32)
     # )
 
-    # model = VGGModel(
-    #     lr=learning_rate, dataset_name=dataset_name, save=True,
-    #     run_id=run_id, # needed to resume
-    #     optimizer_cls=optimizer,
-    #     optimizer_params=optimizer_params,
-    #     scheduler_cls = scheduler,
-    #     scheduler_params = scheduler_params,
-    #     metrics=metrics,
-    #     num_classes=num_classes,
-    #     label_smoothing=label_smoothing,
-    #     image_size=image_size
-    # )
+    model = VGGModel(
+        lr=learning_rate, dataset_name=dataset_name, save=True,
+        run_id=run_id, # needed to resume
+        optimizer_cls=optimizer,
+        optimizer_params=optimizer_params,
+        scheduler_cls = scheduler,
+        scheduler_params = scheduler_params,
+        metrics=metrics,
+        num_classes=num_classes,
+        label_smoothing=label_smoothing,
+        image_size=image_size
+    )
 
     # ♻️ Loading a checkpoint (optional)
     if resume:

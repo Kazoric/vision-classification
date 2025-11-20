@@ -99,3 +99,20 @@ class VGGModel(Model):
             "variant": self.variant,
             "use_batchnorm": self.use_batchnorm,
         }
+    
+    def get_target_layer(self):
+        """
+        Returns the target layer for Grad-CAM.
+        For VGG, we want the last Convolutional layer in the features sequence.
+        We avoid the final MaxPool layer because it makes gradients sparse.
+        """
+        # self.model.features is a Sequential block containing:
+        # Conv2d -> ReLU -> MaxPool -> ...
+        
+        # We iterate backwards to find the last Conv2d
+        for layer in reversed(self.model.features):
+            if isinstance(layer, nn.Conv2d):
+                return layer
+                
+        # Fallback (should not happen in standard VGG)
+        return self.model.features[-1]

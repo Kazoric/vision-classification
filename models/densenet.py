@@ -155,3 +155,13 @@ class DenseNetModel(Model):
             "compression": self.compression,
             "dropout": self.dropout,
         }
+
+    def get_target_layer(self):
+        """
+        Returns the target layer for Grad-CAM.
+        For DenseNet, the best target is the 'final_bn' layer 
+        which sits right after the last DenseBlock and before the Global Pooling.
+        """
+        # self.model.final_bn captures the aggregated features 
+        # from all previous dense layers.
+        return self.model.final_bn

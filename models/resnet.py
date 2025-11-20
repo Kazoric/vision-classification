@@ -200,3 +200,6 @@ class ResNetModel(Model):
             "block": self.block_str,
             "dropout": self.dropout
         }
+    
+    def get_target_layer(self):
+        return self.model.layers[-1][-1]

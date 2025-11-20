@@ -202,3 +202,6 @@ class WideResNetModel(Model):
             "widen_factor": self.widen_factor,
             "dropout": self.dropout
         }
+    
+    def get_target_layer(self):
+        return self.model.layers[-1][-1]

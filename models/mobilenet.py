@@ -124,3 +124,12 @@ class MobileNetModel(Model):
             "width_multiplier": self.width_multiplier,
             "use_batchnorm": self.use_batchnorm,
         }
+    
+    def get_target_layer(self):
+        last_block = self.model.features[-1]
+        
+        for layer in reversed(last_block.block):
+            if isinstance(layer, nn.Conv2d):
+                return layer
+            
+        return last_block

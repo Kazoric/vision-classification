@@ -187,46 +187,58 @@ class ConvNeXtModel(Model):
         self,
         num_classes: int = 100,
         image_size: Tuple[int, int] = (32, 32),
-        # Simplified parameters for user interface
-        embed_dim: int = 96,     # Starting dimension (Stage 0)
-        depth_scale: int = 1,    # Multiplier for stage depth
-        drop_path_rate: float = 0.0,
+        # Architecture hyperparameters
+        embed_dim: int = 96,               # Initial embedding dimension (Stage 0)
+        depths: List[int] = [3, 3, 9, 3],  # Number of blocks per stage (Default: ConvNeXt-Tiny)
+        drop_path_rate: float = 0.0,       # Stochastic depth rate
         **kwargs,
     ):
         self.name = "ConvNeXt"
         self.small_input = image_size[0] <= 64
         
-        # Standard "Tiny" ConvNeXt configuration adapted for CIFAR/Small images
-        # Standard depths: [3, 3, 9, 3]. Can be scaled with depth_scale.
-        base_depths = [3, 3, 9, 3]
-        scaled_depths = [d * depth_scale for d in base_depths]
-        
-        # Standard dims: [96, 192, 384, 768]. Based on embed_dim.
-        # Note: For small images (32x32), pay attention to total stride.
-        # Total stride = 4 * 2 * 2 * 2 = 32. So final feature map = 1x1. Perfect.
-        dims = [embed_dim, embed_dim*2, embed_dim*4, embed_dim*8]
-
+        # 1. SAVING CONFIGURATION
+        # We store exactly what is passed to __init__ in self.params.
+        # This dictionary is the "recipe" to recreate the model instance later.
         self.params = {
             "num_classes": num_classes,
-            "depths": scaled_depths,
-            "dims": dims,
+            "image_size": image_size,
+            "embed_dim": embed_dim,
+            "depths": depths,             # Explicitly stored
             "drop_path_rate": drop_path_rate,
-            "image_size": image_size
         }
+
+        # 2. DERIVED ATTRIBUTES
+        # These are calculated based on the inputs but not stored in self.params
+        # to avoid arguments mismatch during model reloading.
+        
+        # Standard ConvNeXt width expansion: [dim, dim*2, dim*4, dim*8]
+        # e.g., [96, 192, 384, 768]
+        self.dims = [embed_dim, embed_dim*2, embed_dim*4, embed_dim*8]
+        
+        # Initialize base class
         super().__init__(num_classes=num_classes, **kwargs)
 
     def build_model(self):
         print(
-            f"Building ConvNeXt with depths {self.params['depths']} "
-            f"and dims {self.params['dims']}."
+            f"Building ConvNeXt with depths {self.params['depths']} " 
+            f"and dims {self.dims}."
         )
+        
+        # Pass the stored params and the calculated dims to the architecture
         return ConvNeXtArchitecture(
-            num_classes=self.num_classes,
-            depths=self.params["depths"],
-            dims=self.params["dims"],
+            num_classes=self.params["num_classes"],
+            small_input=self.small_input,
+            depths=self.params["depths"],        # Uses the list passed in __init__
+            dims=self.dims,                      # Uses the calculated dimensions
             drop_path_rate=self.params["drop_path_rate"],
-            small_input=self.small_input
         )
 
     def get_model_specific_params(self):
         return self.params
+    
+    def get_target_layer(self):
+        # On vise le dernier bloc du dernier stage (stage 3)
+        # self.model est l'instance de ConvNeXtArchitecture
+        # stages[3] est le dernier stage
+        # [-1] est le dernier bloc ConvNeXtBlock de ce stage
+        return self.model.stages[-1][-1]

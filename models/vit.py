@@ -174,3 +174,6 @@ class ViTModel(Model):
 
     def get_model_specific_params(self):
         return self.params
+    
+    def get_target_layer(self):
+        return self.model.blocks[-1].norm1
