@@ -51,6 +51,30 @@ class Visualizer:
         plt.grid(True)
         plt.tight_layout()
 
+        if save:
+            save_path = f"experiments/{run_id}/plots"
+            os.makedirs(save_path, exist_ok=True)
+            save_path = os.path.join(save_path, 'loss')
+            plt.savefig(save_path)
+            print(f"Training curves saved to {save_path}")
+
+        # Plot learning rate
+        plt.figure(figsize=(8, 5))
+        plt.plot(epochs, trainer.lr_history, label='Learning Rate')
+        plt.xlabel('Epoch')
+        plt.ylabel('Learning Rate')
+        plt.title('Learning Rate History')
+        plt.legend()
+        plt.grid(True)
+        plt.tight_layout()
+
+        if save:
+            save_path = f"experiments/{run_id}/plots"
+            os.makedirs(save_path, exist_ok=True)
+            save_path = os.path.join(save_path, 'learning_rate')
+            plt.savefig(save_path)
+            print(f"Training curves saved to {save_path}")
+
         # Plot each metric separately
         for metric_name in trainer.train_metrics:
             plt.figure(figsize=(8, 5))

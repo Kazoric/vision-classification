@@ -4,6 +4,7 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.optim import Adam
 from torch.utils.data import DataLoader
+from torch.optim.lr_scheduler import SequentialLR, LinearLR
 from abc import ABC, abstractmethod
 from tqdm import tqdm
 import matplotlib.pyplot as plt
@@ -50,7 +51,9 @@ class Model(ABC):
         scheduler_params: Optional[Dict[str, Any]] = None,
         metrics: dict[str, tuple[Callable, dict[str, Any]]] = {"Top-1 Accuracy": (topk_accuracy_torch, {"k": 1})},
         num_classes: Optional[int] = None,
-        label_smoothing: float = 0
+        label_smoothing: float = 0,
+        warm_up: bool = False,
+        warm_up_epochs: int = 5,
     ) -> None:
         """
         Initialize the Model object.
@@ -74,6 +77,7 @@ class Model(ABC):
 
         # Set number of classes
         self.num_classes = num_classes
+        self.dataset_name = dataset_name
         
         # Build and move model to device
         self.model = self.build_model().to(self.device)
@@ -102,17 +106,70 @@ class Model(ABC):
         self.lr = lr
         self.optimizer = optimizer_cls(self.model.parameters(), lr=lr, **optimizer_params)
 
-        # Initialize scheduler (optional)
+        # Initialize scheduler
+        self.scheduler = None
+        self.scheduler_name = None
+        self.scheduler_params = {}
+
         if scheduler_cls is not None:
-            self.scheduler_name = scheduler_cls.__name__
-            if scheduler_params is None:
-                scheduler_params = {}
-            self.scheduler = scheduler_cls(self.optimizer, **scheduler_params)
-            self.scheduler_params = scheduler_params
-        else:
-            self.scheduler = None
-            self.scheduler_name = None
-            self.scheduler_params = {}
+            
+            # Parameters for the main scheduler
+            main_scheduler_params = scheduler_params or {}
+            
+            # Warm up
+            if warm_up:
+                
+                # Ensure the optimizer's LR is indeed our LR_MAX
+                lr_max = self.lr
+                lr_start = lr_max * 0.05
+                
+                # The LinearLR will handle the factor multiplication: LR_MAX * 0.05 -> LR_MAX * 1.0
+                self.optimizer.param_groups[0]['lr'] = lr_max
+
+                # Warm-up Scheduler (LinearLR)
+                warmup_scheduler = LinearLR(
+                    self.optimizer,
+                    start_factor=0.05,
+                    end_factor=1.0,
+                    total_iters=warm_up_epochs
+                )
+
+                # Main Scheduler (e.g., CosineAnnealingLR)
+                main_scheduler = scheduler_cls(self.optimizer, **main_scheduler_params)
+                
+                # Build the SequentialLR
+                self.scheduler = SequentialLR(
+                    self.optimizer,
+                    schedulers=[warmup_scheduler, main_scheduler],
+                    milestones=[warm_up_epochs]
+                )
+                self.scheduler_name = SequentialLR.__name__
+                self.scheduler_params = {
+                    "warmup_epochs": warm_up_epochs,
+                    "main_scheduler": scheduler_cls.__name__,
+                    "main_params": main_scheduler_params,
+                    "milestones": [warm_up_epochs]
+                }
+                
+                print(f"INFO: Warm-up enabled. Initial LR {lr_start:.6f} -> Max LR {lr_max:.6f} for {warm_up_epochs} epochs.")
+
+            # No warm up
+            else:
+                self.scheduler = scheduler_cls(self.optimizer, **main_scheduler_params)
+                self.scheduler_name = scheduler_cls.__name__
+                self.scheduler_params = main_scheduler_params
+
+        # # Initialize scheduler (optional)
+        # if scheduler_cls is not None:
+        #     self.scheduler_name = scheduler_cls.__name__
+        #     if scheduler_params is None:
+        #         scheduler_params = {}
+        #     self.scheduler = scheduler_cls(self.optimizer, **scheduler_params)
+        #     self.scheduler_params = scheduler_params
+        # else:
+        #     self.scheduler = None
+        #     self.scheduler_name = None
+        #     self.scheduler_params = {}
 
         # Initialize checkpoint manager
         self.checkpoint = CheckpointManager(
@@ -234,7 +291,7 @@ class Model(ABC):
         num_epochs: int
     ) -> None:
         """
-        Save hyperparameters to a JSON file.
+        Save hyperparameters and results to a JSON file.
         
         Args:
             optimizer_name (str): Name of the optimizer
@@ -244,10 +301,13 @@ class Model(ABC):
             batch_size (int): Batch size used during training
             num_epochs (int): Number of epochs trained for
         """
+
+        final_best_metrics = self.trainer.get_final_metrics()
         
         meta = {
             "model_name": self.name,
             "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "dataset_name": self.dataset_name,
             "num_classes": self.num_classes,
             "batch_size": batch_size,
             "learning_rate": self.lr,
@@ -257,7 +317,8 @@ class Model(ABC):
             "scheduler": self.scheduler_name,
             "scheduler_params": self.scheduler_params,
             "metrics": list(self.metrics.keys()),
-            "model_params": self.get_model_specific_params()
+            "model_params": self.get_model_specific_params(),
+            "best_validation_results": final_best_metrics
         }
 
         path = os.path.join(f"experiments/{self.run_id}", "meta.json")

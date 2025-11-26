@@ -77,9 +77,14 @@ class Trainer:
         self.train_loss = []
         self.valid_loss = []
 
+        # Initialize learning rate tracking lists
+        self.lr_history = []
+
         # Initialize best validation loss and start epoch attributes
         self.best_val_loss = float('inf')
         self.start_epoch = 0
+
+        self.best_epoch_metrics: dict = {}
 
         # Initialize metrics attribute
         if metrics:
@@ -109,6 +114,10 @@ class Trainer:
         
         # Iterate over training epochs
         for epoch in range(self.start_epoch, epochs):
+
+            # Store learning rate
+            current_lr = self.optimizer.param_groups[0]['lr']
+            self.lr_history.append(current_lr)
             
             # Set model to training mode
             self.model.train()
@@ -148,7 +157,7 @@ class Trainer:
 
             # Print training metrics
             metrics_str = " | ".join(f"{name}: {value:.4f}" for name, value in metric_outputs.items())
-            print(f"{'Train':<12} | Loss: {running_loss:.4f} | {metrics_str}")
+            print(f"{'Train':<12} | Loss: {running_loss:.4f} | {metrics_str} | Learning Rate: {current_lr:.4f}")
 
             # Evaluate model on validation set if available
             if val_loader:
@@ -157,6 +166,20 @@ class Trainer:
                 # Save best model if validation loss improves
                 if self.save and val_loss < self.best_val_loss:
                     self.best_val_loss = val_loss
+
+                    last_train_metrics = {
+                        name: self.train_metrics[name][-1] for name in self.metrics.keys()
+                    }
+                    last_valid_metrics = {
+                        name: self.valid_metrics[name][-1] for name in self.metrics.keys()
+                    }
+                    self.best_epoch_metrics = {
+                        "epoch": epoch + 1,
+                        "train_loss": running_loss,
+                        "val_loss": val_loss,
+                        "train_metrics": last_train_metrics,
+                        "valid_metrics": last_valid_metrics
+                    }
                     if self.save_checkpoint:
                         self.save_checkpoint(epoch + 1, val_loss)
             
@@ -223,5 +246,6 @@ class Trainer:
             score = func(y_true, y_pred_logits, **params)
             metric_outputs[name] = score
         return metric_outputs
-
-
+    
+    def get_final_metrics(self) -> dict:
+        return self.best_epoch_metrics

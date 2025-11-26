@@ -119,7 +119,7 @@ class ConvNeXtArchitecture(nn.Module):
         if small_input:
             # CONFIGURATION CIFAR (32x32 -> 32x32)
             stem = nn.Sequential(
-                nn.Conv2d(3, dims[0], kernel_size=3, stride=2, padding=1),
+                nn.Conv2d(3, dims[0], kernel_size=3, stride=1, padding=1),
                 LayerNorm(dims[0], eps=1e-6, data_format="channels_first")
             )
         else:
@@ -196,21 +196,15 @@ class ConvNeXtModel(Model):
         self.name = "ConvNeXt"
         self.small_input = image_size[0] <= 64
         
-        # 1. SAVING CONFIGURATION
-        # We store exactly what is passed to __init__ in self.params.
         # This dictionary is the "recipe" to recreate the model instance later.
         self.params = {
             "num_classes": num_classes,
             "image_size": image_size,
             "embed_dim": embed_dim,
-            "depths": depths,             # Explicitly stored
+            "depths": depths,
             "drop_path_rate": drop_path_rate,
         }
 
-        # 2. DERIVED ATTRIBUTES
-        # These are calculated based on the inputs but not stored in self.params
-        # to avoid arguments mismatch during model reloading.
-        
         # Standard ConvNeXt width expansion: [dim, dim*2, dim*4, dim*8]
         # e.g., [96, 192, 384, 768]
         self.dims = [embed_dim, embed_dim*2, embed_dim*4, embed_dim*8]
@@ -237,8 +231,4 @@ class ConvNeXtModel(Model):
         return self.params
     
     def get_target_layer(self):
-        # On vise le dernier bloc du dernier stage (stage 3)
-        # self.model est l'instance de ConvNeXtArchitecture
-        # stages[3] est le dernier stage
-        # [-1] est le dernier bloc ConvNeXtBlock de ce stage
         return self.model.stages[-1][-1]
