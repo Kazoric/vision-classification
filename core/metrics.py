@@ -1,199 +1,116 @@
-# Import necessary libraries
+from typing import Callable, Dict, List, Optional, Tuple
+
 import torch
-import matplotlib.pyplot as plt
-import seaborn as sns
 
+# Registry : nom utilisable dans la config -> fonction (y_true, logits, **params) -> float
+METRICS: Dict[str, Callable] = {}
+
+
+def register_metric(fn: Callable) -> Callable:
+    if fn.__name__ in METRICS:
+        raise ValueError(f"Metric '{fn.__name__}' already registered")
+    METRICS[fn.__name__] = fn
+    return fn
+
+
+# ----------------------------------------------------------------------
+# Helpers
+# ----------------------------------------------------------------------
+
+def _confusion_from_labels(y_true: torch.Tensor, y_pred: torch.Tensor, num_classes: int) -> torch.Tensor:
+    indices = num_classes * y_true.long() + y_pred.long()
+    cm = torch.bincount(indices, minlength=num_classes * num_classes)
+    return cm.reshape(num_classes, num_classes)
+
+
+def confusion_matrix_torch(y_true: torch.Tensor, y_pred_logits: torch.Tensor, num_classes: int) -> torch.Tensor:
+    """
+    Confusion matrix (rows = true class, columns = predicted class).
+    Not a scalar metric: use it after training, not through the config.
+    """
+    return _confusion_from_labels(y_true, y_pred_logits.argmax(dim=1), num_classes)
+
+
+def _tp_fp_fn(y_true: torch.Tensor, y_pred_logits: torch.Tensor, num_classes: int
+              ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    """Per-class true positives, false positives and false negatives (one pass)."""
+    cm = confusion_matrix_torch(y_true, y_pred_logits, num_classes).float()
+    tp = cm.diag()
+    fp = cm.sum(dim=0) - tp
+    fn = cm.sum(dim=1) - tp
+    return tp, fp, fn
+
+
+# ----------------------------------------------------------------------
+# Scalar metrics (usable from the config)
+# ----------------------------------------------------------------------
+
+@register_metric
 def accuracy_score_torch(y_true: torch.Tensor, y_pred_logits: torch.Tensor) -> float:
-    """
-    Compute the accuracy score of a model.
-    
-    Args:
-        y_true (torch.Tensor): Ground truth labels
-        y_pred (torch.Tensor): Predicted labels
-        
-    Returns:
-        float: Accuracy score
-    """
-    
+    """Top-1 accuracy."""
     y_pred = y_pred_logits.argmax(dim=1)
+    return (y_true == y_pred).sum().item() / y_true.size(0)
 
-    # Compute correct predictions and total number of samples
-    correct = (y_true == y_pred).sum().item()
-    total = y_true.size(0)
-    
-    # Return accuracy score
-    return correct / total
 
+@register_metric
 def topk_accuracy_torch(y_true: torch.Tensor, y_pred_logits: torch.Tensor, k: int = 5) -> float:
-    """
-    Compute the Top-k accuracy of a model.
-    
-    Args:
-        y_true (torch.Tensor): Ground truth labels, shape (N,)
-        y_pred_logits (torch.Tensor): Model output logits or probabilities, shape (N, C)
-        k (int): Value of k for Top-k accuracy
-        
-    Returns:
-        float: Top-k accuracy score
-    """
-    # Get top-k predicted class indices
-    topk_pred = torch.topk(y_pred_logits, k=k, dim=1).indices  # (N, k)
-    
-    # Check if true label is among the top-k predictions
+    """Top-k accuracy."""
+    if k > y_pred_logits.size(1):
+        raise ValueError(f"k={k} > number of classes ({y_pred_logits.size(1)})")
+    topk_pred = torch.topk(y_pred_logits, k=k, dim=1).indices                # (N, k)
     correct = topk_pred.eq(y_true.view(-1, 1)).any(dim=1).sum().item()
-    total = y_true.size(0)
-    return correct / total
+    return correct / y_true.size(0)
 
-def f1_score_torch(y_true: torch.Tensor, y_pred_logits: torch.Tensor, num_classes: int) -> float:
-    """
-    Compute the F1 score of a model.
-    
-    Args:
-        y_true (torch.Tensor): Ground truth labels
-        y_pred (torch.Tensor): Predicted labels
-        num_classes (int): Number of classes
-        
-    Returns:
-        float: F1 score
-    """
 
-    y_pred = y_pred_logits.argmax(dim=1)
-    
-    # Initialize list to store F1 scores for each class
-    f1_per_class = []
-    
-    # Iterate over classes
-    for cls in range(num_classes):
-        
-        # Compute true positives, false positives, and false negatives
-        tp = ((y_pred == cls) & (y_true == cls)).sum().item()
-        fp = ((y_pred == cls) & (y_true != cls)).sum().item()
-        fn = ((y_pred != cls) & (y_true == cls)).sum().item()
-        
-        # Compute precision and recall
-        precision = tp / (tp + fp + 1e-8)
-        recall = tp / (tp + fn + 1e-8)
-        
-        # Compute F1 score
-        f1 = 2 * precision * recall / (precision + recall + 1e-8)
-        
-        # Append F1 score to list
-        f1_per_class.append(f1)
-    
-    # Return macro average of F1 scores
-    return sum(f1_per_class) / num_classes
-
+@register_metric
 def precision_score_torch(y_true: torch.Tensor, y_pred_logits: torch.Tensor, num_classes: int) -> float:
-    """
-    Compute the precision score of a model.
-    
-    Args:
-        y_true (torch.Tensor): Ground truth labels
-        y_pred (torch.Tensor): Predicted labels
-        num_classes (int): Number of classes
-        
-    Returns:
-        float: Precision score
-    """
+    """Macro-averaged precision."""
+    tp, fp, _ = _tp_fp_fn(y_true, y_pred_logits, num_classes)
+    return (tp / (tp + fp).clamp(min=1)).mean().item()
 
-    y_pred = y_pred_logits.argmax(dim=1)
-    
-    # Initialize list to store precision scores for each class
-    precisions = []
-    
-    # Iterate over classes
-    for cls in range(num_classes):
-        
-        # Compute true positives and false positives
-        tp = ((y_pred == cls) & (y_true == cls)).sum().item()
-        fp = ((y_pred == cls) & (y_true != cls)).sum().item()
-        
-        # Compute precision score
-        precision = tp / (tp + fp + 1e-8)
-        
-        # Append precision score to list
-        precisions.append(precision)
-    
-    # Return macro average of precision scores
-    return sum(precisions) / num_classes
 
+@register_metric
 def recall_score_torch(y_true: torch.Tensor, y_pred_logits: torch.Tensor, num_classes: int) -> float:
-    """
-    Compute the recall score of a model.
-    
-    Args:
-        y_true (torch.Tensor): Ground truth labels
-        y_pred (torch.Tensor): Predicted labels
-        num_classes (int): Number of classes
-        
-    Returns:
-        float: Recall score
-    """
+    """Macro-averaged recall (equals balanced accuracy)."""
+    tp, _, fn = _tp_fp_fn(y_true, y_pred_logits, num_classes)
+    return (tp / (tp + fn).clamp(min=1)).mean().item()
 
-    y_pred = y_pred_logits.argmax(dim=1)
-    
-    # Initialize list to store recall scores for each class
-    recalls = []
-    
-    # Iterate over classes
-    for cls in range(num_classes):
-        
-        # Compute true positives and false negatives
-        tp = ((y_pred == cls) & (y_true == cls)).sum().item()
-        fn = ((y_pred != cls) & (y_true == cls)).sum().item()
-        
-        # Compute recall score
-        recall = tp / (tp + fn + 1e-8)
-        
-        # Append recall score to list
-        recalls.append(recall)
-    
-    # Return macro average of recall scores
-    return sum(recalls) / num_classes
 
-def confusion_matrix_torch(y_true: torch.Tensor, y_pred: torch.Tensor, num_classes: int) -> torch.Tensor:
-    """
-    Compute the confusion matrix of a model.
-    
-    Args:
-        y_true (torch.Tensor): Ground truth labels
-        y_pred (torch.Tensor): Predicted labels
-        num_classes (int): Number of classes
-        
-    Returns:
-        torch.Tensor: Confusion matrix
-    """
-    
-    # Initialize tensor to store confusion matrix
-    indices = num_classes * y_true + y_pred
-    cm = torch.bincount(indices, minlength=num_classes*num_classes)
-    cm = cm.reshape(num_classes, num_classes)
-    
-    return cm
+@register_metric
+def f1_score_torch(y_true: torch.Tensor, y_pred_logits: torch.Tensor, num_classes: int) -> float:
+    """Macro-averaged F1 score."""
+    tp, fp, fn = _tp_fp_fn(y_true, y_pred_logits, num_classes)
+    return (2 * tp / (2 * tp + fp + fn).clamp(min=1)).mean().item()
 
-def plot_confusion_matrix(cm: torch.Tensor, class_names: list) -> None:
-    """
-    Plot the confusion matrix of a model.
-    
-    Args:
-        cm (torch.Tensor): Confusion matrix
-        class_names (list): List of class names
-        
-    Returns:
-        None
-    """
-    
-    # Create figure and axis
-    plt.figure(figsize=(8,6))
-    
-    # Use seaborn to plot heatmap
-    sns.heatmap(cm.cpu().numpy(), annot=True, fmt='d', cmap='Blues',
-                xticklabels=class_names, yticklabels=class_names)
-    
-    # Set labels and title
-    plt.xlabel('Predicted')
-    plt.ylabel('True')
-    plt.title('Confusion Matrix')
-    
-    # Show plot
-    plt.show()
+
+# ----------------------------------------------------------------------
+# Plotting (heavy imports kept local)
+# ----------------------------------------------------------------------
+
+def plot_confusion_matrix(
+    cm: torch.Tensor,
+    class_names: List[str],
+    normalize: bool = False,
+    save_path: Optional[str] = None,
+):
+    """Plot a confusion matrix. If save_path is given, save instead of showing."""
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+
+    data = cm.cpu().float()
+    if normalize:                                   # each row sums to 1 (per-class recall)
+        data = data / data.sum(dim=1, keepdim=True).clamp(min=1)
+
+    fig, ax = plt.subplots(figsize=(8, 6))
+    sns.heatmap(data.numpy(), annot=True, fmt=".2f" if normalize else "d", cmap="Blues",
+                xticklabels=class_names, yticklabels=class_names, ax=ax)
+    ax.set_xlabel("Predicted")
+    ax.set_ylabel("True")
+    ax.set_title("Confusion Matrix")
+
+    if save_path:
+        fig.savefig(save_path, bbox_inches="tight")
+        plt.close(fig)
+    else:
+        plt.show()
+    return fig
