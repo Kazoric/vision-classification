@@ -1,11 +1,13 @@
-import os, math
+import os
 import numpy as np
 import torch
 from torchvision import datasets, transforms
 from torch.utils.data import DataLoader
-from typing import Tuple, Optional, List, Dict, Any
+from typing import Tuple, Optional, List
 import inspect
 import json
+
+from core.ssl.augmentations import TwoViewTransform
 
 
 def supports_download(dataset_class):
@@ -110,9 +112,102 @@ def get_dataset_class(dataset_name: str):
             return cls
     raise ValueError(f"Dataset '{dataset_name}' not found in torchvision.datasets.")
 
-# -------------------------------------------------
-# Loading the dataset
-# -------------------------------------------------
+
+def _resolve_dataset(dataset_name: str, root_dir: str):
+    dataset_name = dataset_name.upper()
+    try:
+        dataset_class = get_dataset_class(dataset_name)
+    except ValueError:
+        print(f"[Info] Using ImageFolder for custom dataset '{dataset_name}'.")
+        dataset_class = datasets.ImageFolder
+    root_dir = os.path.join(root_dir, dataset_name)
+    os.makedirs(root_dir, exist_ok=True)
+    return dataset_class, root_dir, dataset_name
+
+
+def _resolve_stats(dataset_class, root_dir, dataset_name, batch_size, image_size,
+                   use_computed_stats, **dataset_kwargs):
+    """Returns (mean, std): computed/cached values or default ImageNet values."""
+    if not use_computed_stats:
+        return (0.485, 0.456, 0.406), (0.229, 0.224, 0.225)
+
+    stats_path = os.path.join(root_dir, "stats.json")
+    if os.path.exists(stats_path):
+        print(f"[Stats] Loading existing stats from {stats_path}")
+        with open(stats_path, "r") as f:
+            stats = json.load(f)
+        mean, std = stats["mean"], stats["std"]
+    else:
+        # For ImageFolder, compute statistics using only the training set
+        stats_root = root_dir if supports_download(dataset_class) else os.path.join(root_dir, "train")
+        mean, std = compute_mean_std(dataset_class, stats_root, batch_size, image_size, **dataset_kwargs)
+        with open(stats_path, "w") as f:
+            json.dump({"mean": mean, "std": std}, f, indent=4)
+    print(f"[Stats] {dataset_name} mean={mean}, std={std}")
+    return mean, std
+
+
+def _make_dataset(dataset_class, root_dir, split: str, transform, **dataset_kwargs):
+    """split : 'train' or 'val'."""
+    if not supports_download(dataset_class):             # ImageFolder : root/train, root/valid
+        folder = "train" if split == "train" else "valid"
+        return dataset_class(os.path.join(root_dir, folder), transform=transform)
+
+    params = inspect.signature(dataset_class.__init__).parameters
+    kw = dict(dataset_kwargs)
+    if "train" in params:                                # CIFAR10, CIFAR100, etc.
+        kw["train"] = split == "train"
+    elif "split" in params:                              # Imagenette, etc. (STL10 uses 'test' instead of 'val')
+        kw["split"] = "train" if split == "train" else "val"
+    return dataset_class(root=root_dir, download=True, transform=transform, **kw)
+
+
+def _get_targets(dataset) -> np.ndarray:
+    """Returns the labels of a torchvision dataset (attributes vary by class)."""
+    for attr in ("targets", "labels", "_labels"):
+        if hasattr(dataset, attr):
+            return np.asarray(getattr(dataset, attr))
+    for attr in ("samples", "_samples"):               # ImageFolder, Imagenette, etc.
+        if hasattr(dataset, attr):
+            return np.asarray([s[1] for s in getattr(dataset, attr)])
+    raise AttributeError(f"Impossible de trouver les labels de {type(dataset).__name__}")
+
+
+def _stratified_subset(dataset, fraction: float, seed: int):
+    """
+    Keeps `fraction` of the images from each class. For the same seed, the subsets
+    are nested (the 1% subset is included in the 10% subset), ensuring fair comparisons.
+    """
+    if not 0 < fraction <= 1:
+        raise ValueError(f"train_fraction must be in ]0, 1], received {fraction}")
+    if fraction == 1.0:
+        return dataset
+
+    targets = _get_targets(dataset)
+    rng = np.random.default_rng(seed)
+    idx = []
+    for c in np.unique(targets):
+        cls_idx = rng.permutation(np.where(targets == c)[0])
+        idx += cls_idx[:max(1, round(fraction * len(cls_idx)))].tolist()
+    idx.sort()
+
+    subset = torch.utils.data.Subset(dataset, idx)
+    subset.classes = getattr(dataset, "classes", None)
+    subset.targets = targets[idx].tolist()
+    counts = np.bincount(targets[idx])
+    print(f"[DATA] train_fraction={fraction}: {len(idx)} labeled images "
+          f"(per class: min={counts.min()}, max={counts.max()})")
+    return subset
+
+
+def _loader_kwargs(num_workers: int, prefetch_factor: int = 4,
+                   persistent_workers: bool = True) -> dict:
+    kw = dict(num_workers=num_workers, pin_memory=True)
+    if num_workers > 0:                       # These options cause errors when num_workers=0
+        kw.update(persistent_workers=persistent_workers, prefetch_factor=prefetch_factor)
+    return kw
+
+
 def get_torchvision_dataset(
     dataset_name: str,
     root_dir: str = './data',
@@ -120,122 +215,70 @@ def get_torchvision_dataset(
     num_workers: int = 4,
     image_size: Tuple[int, int] = (224, 224),
     use_computed_stats: bool = False,
+    train_fraction: float = 1.0,       # Fraction of training labels to use (stratified)
+    seed: int = 42,                    # Random seed for subset sampling
+    persistent_workers: bool = True,   # Set to False when running many consecutive experiments
     **dataset_kwargs
 ) -> Tuple[DataLoader, DataLoader]:
-    """
-    Generic dataset loader supporting both torchvision datasets (e.g. CIFAR10, CIFAR100) and ImageFolder.
-    If *use_computed_stats* is ``True`` the function will compute
-    the mean & std on the training split and use those for
-    ``transforms.Normalize``.
-    """
-    dataset_name = dataset_name.upper()
+    dataset_class, root_dir, dataset_name = _resolve_dataset(dataset_name, root_dir)
+    mean, std = _resolve_stats(dataset_class, root_dir, dataset_name, batch_size,
+                               image_size, use_computed_stats, **dataset_kwargs)
+    train_tf, val_tf = get_transforms(image_size, mean, std)
 
-    # Auto-load dataset class or fallback to ImageFolder
-    try:
-        dataset_class = get_dataset_class(dataset_name)
-    except ValueError:
-        print(f"[Info] Using ImageFolder for custom dataset '{dataset_name}'.")
-        dataset_class = datasets.ImageFolder
+    train_set = _make_dataset(dataset_class, root_dir, "train", train_tf, **dataset_kwargs)
+    train_set = _stratified_subset(train_set, train_fraction, seed)
+    val_set = _make_dataset(dataset_class, root_dir, "val", val_tf, **dataset_kwargs)
+    print(f"Loaded dataset '{dataset_name}' from '{root_dir}'.")
 
-    # Ensure dataset directory exists
-    root_dir = os.path.join(root_dir, dataset_name)
-    os.makedirs(root_dir, exist_ok=True)
+    # With small datasets, the last batch may be very small, making BatchNorm unstable; discard it.
+    # No change when train_fraction=1.0: the baseline remains identical.
+    drop_last = train_fraction < 1.0 and len(train_set) > batch_size
 
-    stats_path = os.path.join(root_dir, "stats.json")
-    
-    # Compute mean/std if requested
-    if use_computed_stats:
-        if os.path.exists(stats_path):
-            print(f"[Stats] Loading existing stats from {stats_path}")
-            with open(stats_path, "r") as f:
-                stats = json.load(f)
-            mean, std = stats["mean"], stats["std"]
-        else:
-            mean, std = compute_mean_std(dataset_class, root_dir, batch_size, image_size, **dataset_kwargs)
-            stats = {'mean': mean, 'std': std}
-            with open(stats_path, "w") as f:
-                json.dump(stats, f, indent=4)
-        print(f"[Stats] {dataset_name} mean={mean}, std={std}")
-    else:
-        mean, std = None, None
-
-    # Build the actual transforms
-    train_transform, val_transform = get_transforms(image_size, mean, std)
-
-    try:
-        # Create datasets
-        if supports_download(dataset_class):
-            train_set = dataset_class(root=root_dir, download=True, transform=train_transform, **dataset_kwargs, train=True)
-            val_set = dataset_class(root=root_dir, download=True, transform=val_transform, **dataset_kwargs, train=False)
-        else:
-            train_dir = os.path.join(root_dir, "train")
-            val_dir = os.path.join(root_dir, "valid")
-            train_set = dataset_class(train_dir, transform=train_transform)
-            val_set = dataset_class(val_dir, transform=val_transform)
-
-        print(f"Loaded dataset '{dataset_name}' from '{root_dir}'.")
-
-    except Exception as e:
-        print(f"Error loading/downloading dataset {dataset_name}: {e}")
-        raise
-
-    # Create the DataLoaders
-    train_loader = DataLoader(
-        train_set,
-        batch_size=batch_size,
-        shuffle=True,
-        num_workers=num_workers,
-        pin_memory=True,
-        persistent_workers=True,
-        prefetch_factor=4
-    )
-    val_loader = DataLoader(
-        val_set,
-        batch_size=batch_size,
-        shuffle=False,
-        num_workers=num_workers,
-        pin_memory=True,
-        persistent_workers=True,
-        prefetch_factor=4
-    )
-
+    kw = _loader_kwargs(num_workers, persistent_workers=persistent_workers)
+    train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True,
+                              drop_last=drop_last, **kw)
+    val_loader = DataLoader(val_set, batch_size=batch_size, shuffle=False, **kw)
     return train_loader, val_loader
 
 
-# DATASET_CONFIGS = {
-#     'CIFAR10': {
-#         'class': datasets.CIFAR10,
-#         'train_args': {'train': True},
-#         'val_args': {'train': False},
-#         'resize': False,
-#         'image_size': (32, 32)
-#     },
-#     'CIFAR100': {
-#         'class': datasets.CIFAR100,
-#         'train_args': {'train': True},
-#         'val_args': {'train': False},
-#         'resize': False,
-#         'image_size': (32, 32)
-#     },
-#     'IMAGENETTE': {
-#         'class': datasets.Imagenette,
-#         'train_args': {'split': 'train'},
-#         'val_args': {'split': 'val'},
-#         'resize': True,
-#         'image_size': (160, 160)
-#     },
-#     'IMAGENET': {
-#         'class': datasets.ImageNet,
-#         'train_args': {'split': 'train'},
-#         'val_args': {'split': 'val'},
-#         'resize': True,
-#         'image_size': (224, 224)
-#     },
-#     'EXAMPLE': {
-#         'class': datasets.ImageFolder,
-#         'train_args': {'split': 'train'},
-#         'val_args': {'split': 'val'},
-#         'resize': True,
-#         'image_size': (160, 160)
-#     }
-# }
+def get_ssl_dataloaders(
+    dataset_name: str,
+    aug_cfg,
+    root_dir: str = './data',
+    batch_size: int = 256,
+    num_workers: int = 4,
+    image_size: Tuple[int, int] = (32, 32),
+    use_computed_stats: bool = False,
+    limit: Optional[int] = None,        # Random training subset (smoke-test mode)
+    knn_fraction: float = 1.0,          # Fraction of labels to use in the kNN bank (stratified)
+    seed: int = 42,
+    **dataset_kwargs
+):
+    dataset_class, root_dir, dataset_name = _resolve_dataset(dataset_name, root_dir)
+    mean, std = _resolve_stats(dataset_class, root_dir, dataset_name, batch_size,
+                               image_size, use_computed_stats, **dataset_kwargs)
+    _, eval_tf = get_transforms(image_size, mean, std)
+    two_view = TwoViewTransform(aug_cfg, image_size, mean, std)
+
+    ssl_set = _make_dataset(dataset_class, root_dir, "train", two_view, **dataset_kwargs)
+    knn_train_set = _make_dataset(dataset_class, root_dir, "train", eval_tf, **dataset_kwargs)
+    val_set = _make_dataset(dataset_class, root_dir, "val", eval_tf, **dataset_kwargs)
+
+    if limit and knn_fraction < 1.0:
+        raise ValueError("limit and knn_fraction cannot be used together; choose one")
+
+    if limit:      # Smoke-test mode: use the same subset for pretraining and the kNN bank
+        idx = np.random.default_rng(seed).permutation(len(ssl_set))[:limit].tolist()
+        ssl_set = torch.utils.data.Subset(ssl_set, idx)
+        knn_train_set = torch.utils.data.Subset(knn_train_set, idx)
+
+    # The kNN bank is restricted to the labeled images defined by the protocol (pretraining uses all images).
+    knn_train_set = _stratified_subset(knn_train_set, knn_fraction, seed)
+
+    kw = _loader_kwargs(num_workers)
+    ssl_loader = DataLoader(ssl_set, batch_size=batch_size, shuffle=True, drop_last=True, **kw)
+    knn_train_loader = DataLoader(knn_train_set, batch_size=512, shuffle=False, **kw)
+    val_loader = DataLoader(val_set, batch_size=512, shuffle=False, **kw)
+
+    print(f"[DATA] ssl_train={len(ssl_set)} | knn_bank={len(knn_train_set)} | val={len(val_set)}")
+    return ssl_loader, knn_train_loader, val_loader, getattr(val_set, "classes", None)
