@@ -1,218 +1,103 @@
-import torch
-from torch import optim
-from torch.optim.lr_scheduler import StepLR, CosineAnnealingLR
+import os
+import json
 import time
+import torch
 
-from models.resnet import ResNetModel
-from models.densenet import DenseNetModel
-from models.mobilenet import MobileNetModel
-from models.vgg import VGGModel
-from models.wide_resnet import WideResNetModel
-from models.vit import ViTModel
-from models.convnext import ConvNeXtModel
-from data_loader import get_torchvision_dataset
+# Core modules imports
+from core.config import Config
+from core.trainer import Trainer
+from core.predictor import Predictor
+from core.checkpoint import CheckpointManager
 from core.visualizer import Visualizer
-from core.metrics import topk_accuracy_torch, f1_score_torch, precision_score_torch, recall_score_torch, confusion_matrix_torch, plot_confusion_matrix
+from core.model_base import Model
+from core.metrics import confusion_matrix_torch
 
-def main():
-    # Model specific hyperparameters
-    network = ResNetModel
-    model_params = {
-        'layer_list': [2,2,2,2], 
-        'block': 'Basic', 
-        'dropout': 0.0,
-
-        # 'embed_dim': 16,
-        # 'depths': [2,2,6,2]
+# Data and Model imports
+from data_loader import get_torchvision_dataset
+yaml_config = {
+    "experiment": {"dataset_name": "cifar10"},
+    "data": {
+        "image_size": [32, 32],
+    },
+    "model": {
+        "num_classes": 10,
+        "backbone": {"name": "resnet", "block": "basic", "layers": [2, 2, 2, 2], "stem": "cifar"},
+    },
+    "training": {"lr": 0.1, "batch_size": 256, "epochs": 2, "warm_up_epochs": 0, "label_smoothing": 0.1},
+    "optimizer": {"type": "SGD", "params": {"momentum": 0.9, "weight_decay": 5.0e-4, "nesterov": True}},
+    "scheduler": {"type": "CosineAnnealingLR", "params": {"T_max": 17}},   # epochs - warm_up
+    "metrics": {
+        "monitor_metric": "Top-1 Accuracy",
+        "Top-1 Accuracy": ["topk_accuracy_torch", {"k": 1}],
+        "Top-5 Accuracy": ("topk_accuracy_torch", {"k": 5}),
+        "F1": ("f1_score_torch", {"num_classes": 10}),
+        "Precision": ("precision_score_torch", {"num_classes": 10}),
+        "Recall": ("recall_score_torch", {"num_classes": 10}),
     }
-    # Model general hyperparameters
-    learning_rate = 0.01
-    num_epochs = 50
-    label_smoothing = 0.1
-    optimizer = optim.AdamW
-    optimizer_params = {"weight_decay": 5e-4}
-    warm_up = True
-    warm_up_epochs = 5
-    scheduler = CosineAnnealingLR
-    scheduler_params = {"T_max": num_epochs-warm_up_epochs}
-
-    # Dataset parameters
-    num_classes = 10
-    batch_size = 512
-    dataset_name = 'Cifar10'
-    image_size = (32,32)
-    resume = False  # True to load a checkpoint if it exists
-    # Change run_id if you want to resume a training
-    run_id = 'last_run_id' if resume else None
-
-    metrics = {
-        "Top-1 Accuracy": (topk_accuracy_torch, {"k": 1}),
-        "Top-5 Accuracy": (topk_accuracy_torch, {"k": 5}),
-        "F1": (f1_score_torch, {"num_classes": num_classes}),
-        "Precision": (precision_score_torch, {"num_classes": num_classes}),
-        "Recall": (recall_score_torch, {"num_classes": num_classes}),
-    }
-
-    # Data
-    train_loader, val_loader = get_torchvision_dataset(
-        dataset_name=dataset_name, 
-        root_dir='./data', 
-        batch_size=batch_size,
-        image_size=image_size,
-        use_computed_stats=True
-    )
-    assert num_classes == len(train_loader.dataset.classes), \
-        f"Configuration error: you set num_classes={num_classes}, but the dataset actually contains {len(train_loader.dataset.classes)} classes."
-
-    # Model
-    model = network(
-        lr=learning_rate, 
-        dataset_name=dataset_name, 
-        save=True,
-        run_id=run_id,  # needed to resume
-        optimizer_cls=optimizer,
-        optimizer_params=optimizer_params,
-        scheduler_cls=scheduler,
-        scheduler_params=scheduler_params,
-        warm_up=warm_up,
-        warm_up_epochs=warm_up_epochs,
-        metrics=metrics,
-        num_classes=num_classes,
-        image_size=image_size,
-        label_smoothing=label_smoothing,
-        **model_params
-    )
-
-    # Model
-    # model = ResNetModel(
-    #     lr=learning_rate, dataset_name=dataset_name, save=True,
-    #     run_id=run_id, # needed to resume
-    #     optimizer_cls=optimizer,
-    #     optimizer_params=optimizer_params,
-    #     scheduler_cls = scheduler,
-    #     scheduler_params = scheduler_params,
-    #     metrics=metrics,
-    #     num_classes=num_classes,
-    #     label_smoothing=label_smoothing,
-    #     # layer_list=[2,2,2,2], block='Basic', dropout=0.0,
-    #     image_size=image_size
-    # )
-    
-    # model = ViTModel(
-    #     lr=learning_rate, dataset_name=dataset_name, save=True,
-    #     run_id=run_id, # needed to resume
-    #     optimizer_cls=optimizer,
-    #     optimizer_params=optimizer_params,
-    #     scheduler_cls = scheduler,
-    #     scheduler_params = scheduler_params,
-    #     metrics=metrics,
-    #     num_classes=num_classes,
-    #     image_size=image_size,
-    #     patch_size = 4,
-    #     depth = 4,
-    #     label_smoothing=label_smoothing
-    # )
-
-    # model = ConvNeXtModel(
-    #     lr=learning_rate, dataset_name=dataset_name, save=True,
-    #     run_id=run_id, # needed to resume
-    #     optimizer_cls=optimizer,
-    #     optimizer_params=optimizer_params,
-    #     scheduler_cls = scheduler,
-    #     scheduler_params = scheduler_params,
-    #     metrics=metrics,
-    #     num_classes=num_classes,
-    #     image_size=image_size,
-    #     label_smoothing=label_smoothing,
-    #     embed_dim=32,
-    #     depths=[2,2,6,2]
-    # )
-
-    # model = MobileNetModel(
-    #     lr=learning_rate, dataset_name=dataset_name, save=True,
-    #     run_id=run_id, # needed to resume
-    #     optimizer_cls=optimizer,
-    #     optimizer_params=optimizer_params,
-    #     scheduler_cls = scheduler,
-    #     scheduler_params = scheduler_params,
-    #     metrics=metrics,
-    #     num_classes=num_classes,
-    #     label_smoothing=label_smoothing,
-    #     image_size=image_size
-    # )
-
-    # model = DenseNetModel(
-    #     lr=learning_rate, dataset_name=dataset_name, save=True,
-    #     run_id=run_id, # needed to resume
-    #     optimizer_cls=optimizer,
-    #     optimizer_params=optimizer_params,
-    #     scheduler_cls = scheduler,
-    #     scheduler_params = scheduler_params,
-    #     metrics=metrics,
-    #     num_classes=num_classes,
-    #     label_smoothing=label_smoothing,
-    #     block_config = [6, 12, 24],
-    #     growth_rate = 12, 
-    #     image_size=(32,32)
-    # )
-
-    # model = WideResNetModel(
-    #     lr=learning_rate, model_name=model_name, dataset_name=dataset_name, save=True,
-    #     run_id=run_id, # needed to resume
-    #     # optimizer_cls=optimizer,
-    #     # optimizer_params=optimizer_params,
-    #     scheduler_cls = scheduler,
-    #     scheduler_params = scheduler_params,
-    #     metrics=metrics,
-    #     num_classes=num_classes,
-    #     # label_smoothing=label_smoothing,
-    #     layer_list=[4, 4, 4], block='Basic', widen_factor=4, image_size=(32,32)
-    # )
-
-    # model = VGGModel(
-    #     lr=learning_rate, dataset_name=dataset_name, save=True,
-    #     run_id=run_id, # needed to resume
-    #     optimizer_cls=optimizer,
-    #     optimizer_params=optimizer_params,
-    #     scheduler_cls = scheduler,
-    #     scheduler_params = scheduler_params,
-    #     metrics=metrics,
-    #     num_classes=num_classes,
-    #     label_smoothing=label_smoothing,
-    #     image_size=image_size
-    # )
-
-    # Loading a checkpoint (optional)
-    if resume:
-        model.load_checkpoint()
-
-    # Training
-    start_time = time.time()
-    model.train(train_loader, val_loader, epochs=num_epochs)
-    end_time = time.time() - start_time
-    print(f"Training took {end_time:.2f} seconds\n")
-
-    # Prediction
-    data_iter = iter(val_loader)
-    images, labels = next(data_iter)
-    outputs = model.predict(images[:4])
-    print(f"Predicted classes: {outputs.tolist()}")
-    print(f"Ground truth:     {labels[:4].tolist()}")
-
-    labels, outputs = model.predict_on_loader(val_loader)
-    cm = confusion_matrix_torch(labels, outputs, num_classes=num_classes)
-
-    # Visualization
-    visualizer = Visualizer()
-    visualizer.plot_metrics(model.trainer, model.run_id)
-    visualizer.plot_confusion_matrix(cm, train_loader.dataset.classes, model.run_id)
-
-    model.save_hyperparams(
-        batch_size=batch_size,
-        num_epochs=num_epochs,
-    )
-
+  }
 
 if __name__ == "__main__":
-    main()
-    print()
+    config = Config.from_dict(yaml_config)
+
+    # Determine the computation device (CUDA if available, otherwise CPU).
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+
+    # Logging initial setup information.
+    print(f"  Device        : {device}")
+    print(f"  Num classes   : {config.model.num_classes}")
+    train_loader, val_loader = get_torchvision_dataset(
+        dataset_name=config.experiment.dataset_name, 
+        root_dir='./data', 
+        batch_size=config.training.batch_size,
+        image_size=config.data.image_size,
+        use_computed_stats=True
+    )
+    assert config.model.num_classes == len(train_loader.dataset.classes), \
+        f"Configuration error: you set num_classes={config.model.num_classes}, but the dataset actually contains {len(train_loader.dataset.classes)} classes."
+    model = Model(config)
+
+    # Log model specifics like name and total parameters.
+    print(f"  Model        : {model.name}")
+    print(f"  Parameters    : {sum(p.numel() for p in model.parameters()):,}")
+    trainer = Trainer.from_config(
+        model=model,
+        config=config,
+        device=device,
+        metrics_config=config.metrics if config.metrics.configs else None,
+    )
+
+    # Setup the CheckpointManager to save and load training state.
+    checkpoint = CheckpointManager(
+        model=model,
+        optimizer=trainer.optimizer,
+        run_id=trainer.run_id,
+    )
+
+    # Configure the trainer to save the best model checkpoint.
+    if config.experiment.save_checkpoints:
+        trainer.on_best_model = checkpoint.save
+
+    # Log the unique run identifier.
+    print(f"  Run ID        : {trainer.run_id}")
+
+    # Initialize the Predictor and Visualizer components.
+    predictor = Predictor(model=model, device=device)
+    visualizer = Visualizer()
+    RESUME = False
+    if RESUME and checkpoint.exists():
+        # Load training state if RESUME is True and a checkpoint exists.
+        state = checkpoint.load(load_optimizer=True)
+        trainer.resume_from(
+            epoch=state["epoch"],
+            best_metric_value=state["best_metric_value"],
+        )
+    print(f"\n=== [STEP 5] Training ({config.training.epochs} epochs) ===")
+    start_time = time.time()
+    # Execute the training loop on both training and validation data.
+    trainer.train(train_loader, val_loader, epochs=config.training.epochs)
+    end_time = time.time() - start_time
+    print(f"Training took {end_time:.2f} seconds\n")
+    _, test_metrics = trainer.evaluate(val_loader)
+    y, logits = trainer.collect_predictions(val_loader)
+    cm = confusion_matrix_torch(y, logits, config.model.num_classes)
+    visualizer.plot_confusion_matrix(cm, train_loader.dataset.classes, run_id=model.run_id)
