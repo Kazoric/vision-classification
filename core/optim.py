@@ -3,7 +3,7 @@ from torch.optim.lr_scheduler import SequentialLR, LinearLR
 
 
 def build_optimizer(params, config):
-    params = [p for p in params if p.requires_grad]   # indispensable pour le linear probe
+    params = [p for p in params if p.requires_grad]
     optimizer_cls = getattr(optim, config.optimizer.type)
     return optimizer_cls(params, lr=config.training.lr, **config.optimizer.params)
 

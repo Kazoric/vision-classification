@@ -1,8 +1,8 @@
 import torch
 from torch import nn
-from typing import List, Dict, Optional, Tuple
 
 from .backbones.base import BaseBackbone
+
 
 class Classifier(nn.Module):
     def __init__(self, backbone: BaseBackbone, num_classes: int,
@@ -21,7 +21,7 @@ class Classifier(nn.Module):
     def forward(self, x):
         return self.head(self.backbone(x))
 
-    # --- utilitaires pour le SSL ---
+    # --- SSL utilities ---
     def load_backbone(self, path: str):
         self.backbone.load_state_dict(torch.load(path, map_location="cpu"))
 

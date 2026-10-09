@@ -9,14 +9,13 @@ import torch.nn as nn
 
 from models.backbones import build_backbone
 from core.config import Config
-from core.optim import build_optimizer, build_scheduler
 from models.classifier import Classifier
 
 
 class Model(nn.Module):
     """
-    Modèle de classification d'images : Classifier (backbone + tête) + loss,
-    optimiseur, scheduler et gestion du run, le tout piloté par la config.
+    Image classification model: Classifier (backbone + head) + loss,
+    optimizer, scheduler, and run management, all driven by the configuration.
     """
 
     def __init__(self, config: Config, device: Optional[str] = None) -> None:
@@ -44,7 +43,7 @@ class Model(nn.Module):
         self.net = Classifier(backbone, m.num_classes,
                               hidden_dim=m.hidden_dim, dropout=m.dropout)
 
-        # Poids SSL puis gel éventuel : AVANT la création de l'optimiseur
+        # Load SSL weights and optionally freeze the backbone before creating the optimizer.
         if m.pretrained_backbone:
             self.net.load_backbone(m.pretrained_backbone)
         if m.freeze_backbone:
@@ -57,7 +56,7 @@ class Model(nn.Module):
         return self.net(images)
 
     def save_backbone(self, path: str) -> None:
-        """Exporte le backbone seul (réutilisable pour le SSL ou un autre Classifier)."""
+        """Export the backbone alone (reusable for SSL or another Classifier)."""
         torch.save(self.net.backbone.state_dict(), path)
 
     def save_hyperparams(self, extra_results: Optional[Dict] = None) -> None:

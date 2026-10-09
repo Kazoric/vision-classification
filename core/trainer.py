@@ -14,12 +14,11 @@ from torch.optim.lr_scheduler import LRScheduler
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-import core.metrics as core_metrics
 from core.optim import build_optimizer, build_scheduler
 
 
 class Trainer:
-    """Boucle d'entraînement / validation pour la classification d'images."""
+    """Training and validation loop for image classification."""
 
     def __init__(
         self,
@@ -45,14 +44,14 @@ class Trainer:
         self.amp = amp
         self.device_type = "cuda" if "cuda" in str(device) else "cpu"
 
-        # --- Run ID : celui du modèle en priorité ---
+        # --- Run ID: prioritize the model's run ID ---
         if run_id is None:
             run_id = getattr(model, "run_id", None)
         if run_id is None and config is not None:
             run_id = getattr(config.experiment, "run_id", None)
         self.run_id = run_id or f"run_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
 
-        # --- Métriques : {nom: (fonction, params)} ---
+        # --- Metrics: {name: (function, parameters)} ---
         self.num_classes = num_classes if num_classes is not None else getattr(model, "num_classes", None)
         self.metrics = self._resolve_metrics(metrics_config, self.num_classes)
         if metrics_config is not None:
@@ -62,22 +61,22 @@ class Trainer:
             self.monitor_metric, self.monitor_mode = "val_loss", "min"
         assert self.monitor_mode in ("max", "min"), "monitor_mode must be 'max' or 'min'"
         if self.monitor_metric not in ("loss", "val_loss") and self.monitor_metric not in self.metrics:
-            raise ValueError(f"monitor_metric '{self.monitor_metric}' absent de metrics.configs")
+            raise ValueError(f"monitor_metric '{self.monitor_metric}' is missing from metrics.configs")
 
-        # --- Historiques ---
+        # --- Training history ---
         self.train_loss: List[float] = []
         self.valid_loss: List[float] = []
         self.lr_history: List[float] = []
         self.train_metrics: Dict[str, List[float]] = {n: [] for n in self.metrics}
         self.valid_metrics: Dict[str, List[float]] = {n: [] for n in self.metrics}
 
-        # --- État interne ---
+        # --- Internal state ---
         self.start_epoch = 0
         self.best_metric_value = float("-inf") if self.monitor_mode == "max" else float("inf")
         self.best_epoch_metrics: dict = {}
 
     # ------------------------------------------------------------------
-    # Construction
+    # Initialization
     # ------------------------------------------------------------------
 
     @classmethod
@@ -92,8 +91,8 @@ class Trainer:
         device = device or ("cuda" if torch.cuda.is_available() else "cpu")
         model = model.to(device)
 
-        # Le gel du backbone (linear probe) est déjà appliqué dans Model.__init__ :
-        # build_optimizer ne reçoit donc que les paramètres entraînables.
+        # The backbone is already frozen for linear probing in Model.__init__:
+        # build_optimizer therefore receives only trainable parameters.
         optimizer = build_optimizer(model.parameters(), config)
         scheduler = build_scheduler(optimizer, config)
 
@@ -113,7 +112,7 @@ class Trainer:
 
     @staticmethod
     def _resolve_metrics(metrics_config: Optional[Any], num_classes: Optional[int]) -> Dict[str, Callable]:
-        """Config names -> ready-to-call functions f(y_true, logits)."""
+        """Convert configuration entries into callable functions f(y_true, logits)."""
         if metrics_config is None:
             return {}
         resolved = {}
@@ -126,13 +125,13 @@ class Trainer:
                 func = METRICS[func]
             if "num_classes" in inspect.signature(func).parameters:
                 if num_classes is None:
-                    raise ValueError(f"Metric '{name}' needs num_classes")
+                    raise ValueError(f"Metric '{name}' requires num_classes")
                 params.setdefault("num_classes", num_classes)
             resolved[name] = functools.partial(func, **params)
         return resolved
 
     # ------------------------------------------------------------------
-    # Entraînement et validation
+    # Training and validation
     # ------------------------------------------------------------------
 
     def _autocast(self):
@@ -219,7 +218,7 @@ class Trainer:
         return val_loss, metric_outputs
 
     # ------------------------------------------------------------------
-    # Métriques et suivi du meilleur modèle
+    # Metrics and best-model tracking
     # ------------------------------------------------------------------
 
     def _compute_metrics(self, y_true: torch.Tensor, logits: torch.Tensor) -> Dict[str, float]:
@@ -277,12 +276,12 @@ class Trainer:
         self.best_metric_value = best_metric_value
 
     # ------------------------------------------------------------------
-    # Métadonnées
+    # Metadata
     # ------------------------------------------------------------------
 
     def save_hyperparams(self, extra_results: Optional[Dict] = None) -> None:
         if self.config is None:
-            print("[WARN] Aucune config liée au Trainer : hyperparamètres non sauvegardés.")
+            print("[WARN] No configuration associated with the Trainer; hyperparameters were not saved.")
             return
 
         meta = asdict(self.config) if is_dataclass(self.config) else dict(self.config)

@@ -2,7 +2,6 @@ from typing import Callable, Dict, List, Optional, Tuple
 
 import torch
 
-# Registry : nom utilisable dans la config -> fonction (y_true, logits, **params) -> float
 METRICS: Dict[str, Callable] = {}
 
 
