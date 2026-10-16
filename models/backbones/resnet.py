@@ -114,3 +114,44 @@ class ResNetBackbone(BaseBackbone):
     @property
     def feature_dim(self) -> int:
         return self._feature_dim
+
+
+@register_backbone("resnet18")
+def resnet18(**kwargs) -> ResNetBackbone:
+    return ResNetBackbone(
+        block="basic",
+        layers=(2, 2, 2, 2),
+        **kwargs,
+    )
+
+@register_backbone("resnet34")
+def resnet34(**kwargs) -> ResNetBackbone:
+    return ResNetBackbone(
+        block="basic",
+        layers=(3, 4, 6, 3),
+        **kwargs,
+    )
+
+@register_backbone("resnet50")
+def resnet50(**kwargs) -> ResNetBackbone:
+    return ResNetBackbone(
+        block="bottleneck",
+        layers=(3, 4, 6, 3),
+        **kwargs,
+    )
+
+@register_backbone("resnet101")
+def resnet101(**kwargs) -> ResNetBackbone:
+    return ResNetBackbone(
+        block="bottleneck",
+        layers=(3, 4, 23, 3),
+        **kwargs,
+    )
+
+@register_backbone("resnet152")
+def resnet152(**kwargs) -> ResNetBackbone:
+    return ResNetBackbone(
+        block="bottleneck",
+        layers=(3, 8, 36, 3),
+        **kwargs,
+    )
