@@ -21,7 +21,12 @@ class Classifier(nn.Module):
 
     def forward(self, x):
         x = self.backbone(x)
-        x = self.pool(x).flatten(1)
+        if x.ndim == 4:
+            # CNN: (B, C, H, W) -> (B, C)
+            x = self.pool(x).flatten(1)
+        elif x.ndim == 3:
+            # Transformer: (B, N, D) -> (B, D)
+            x = x[:, 0]
         return self.head(x)
 
     # --- SSL utilities ---
