@@ -21,11 +21,11 @@ yaml_config = {
     },
     "model": {
         "num_classes": 10,
-        "backbone": {"name": "resnet", "block": "basic", "layers": [2, 2, 2, 2], "stem": "cifar"},
+        "backbone": {"name": "resnet18", "stem": "cifar"},
     },
-    "training": {"lr": 0.1, "batch_size": 256, "epochs": 2, "warm_up_epochs": 0, "label_smoothing": 0.1},
-    "optimizer": {"type": "SGD", "params": {"momentum": 0.9, "weight_decay": 5.0e-4, "nesterov": True}},
-    "scheduler": {"type": "CosineAnnealingLR", "params": {"T_max": 17}},   # epochs - warm_up
+    "training": {"lr": 0.01, "batch_size": 256, "epochs": 10, "warm_up_epochs": 0, "label_smoothing": 0.1},
+    "optimizer": {"type": "AdamW", "params": {"weight_decay": 0.0001, "betas": [0.9, 0.999]}},
+    "scheduler": {"type": "CosineAnnealingLR", "params": {"T_max": 10}},   # epochs - warm_up
     "metrics": {
         "monitor_metric": "Top-1 Accuracy",
         "Top-1 Accuracy": ["topk_accuracy_torch", {"k": 1}],
@@ -34,7 +34,7 @@ yaml_config = {
         "Precision": ("precision_score_torch", {"num_classes": 10}),
         "Recall": ("recall_score_torch", {"num_classes": 10}),
     }
-  }
+}
 
 if __name__ == "__main__":
     config = Config.from_dict(yaml_config)
@@ -97,7 +97,8 @@ if __name__ == "__main__":
     trainer.train(train_loader, val_loader, epochs=config.training.epochs)
     end_time = time.time() - start_time
     print(f"Training took {end_time:.2f} seconds\n")
-    _, test_metrics = trainer.evaluate(val_loader)
     y, logits = trainer.collect_predictions(val_loader)
     cm = confusion_matrix_torch(y, logits, config.model.num_classes)
     visualizer.plot_confusion_matrix(cm, train_loader.dataset.classes, run_id=model.run_id)
+    visualizer.plot_metrics(trainer, model.run_id)
+    trainer.save_hyperparams()
