@@ -62,10 +62,10 @@ class ResNetBackbone(BaseBackbone):
         block_cls = {"basic": BasicBlock, "bottleneck": Bottleneck}[block]
         self.in_planes = 64
 
-        if stem == "cifar":        # petites images (32x32)
+        if stem == "cifar":        # small images (32x32)
             self.conv1 = nn.Conv2d(3, 64, 3, 1, 1, bias=False)
             self.maxpool = nn.Identity()
-        elif stem == "imagenet":   # grandes images (>= 128px)
+        elif stem == "imagenet":   # big images (>= 128px)
             self.conv1 = nn.Conv2d(3, 64, 7, 2, 3, bias=False)
             self.maxpool = nn.MaxPool2d(3, 2, 1)
         else:
@@ -78,7 +78,6 @@ class ResNetBackbone(BaseBackbone):
             self._make_layer(block_cls, w, n, s)
             for w, n, s in zip(widths, layers, strides)
         ])
-        self.pool = nn.AdaptiveAvgPool2d(1)
         self._feature_dim = 512 * block_cls.expansion
         self._init_weights()
 
@@ -102,10 +101,15 @@ class ResNetBackbone(BaseBackbone):
                 nn.init.ones_(m.weight)
                 nn.init.zeros_(m.bias)
 
+        for m in self.modules():
+            if isinstance(m, BasicBlock):
+                nn.init.zeros_(m.bn2.weight)
+            elif isinstance(m, Bottleneck):
+                nn.init.zeros_(m.bn3.weight)
+
     def forward(self, x):
         x = self.maxpool(self.relu(self.bn1(self.conv1(x))))
-        x = self.stages(x)
-        return self.pool(x).flatten(1)
+        return self.stages(x)
 
     @property
     def feature_dim(self) -> int:

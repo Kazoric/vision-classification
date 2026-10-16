@@ -2,6 +2,8 @@
 *.py[codz]
 *$py.class
 
+/test*
+
 /data/
 /experiments/
 /checkpoints/

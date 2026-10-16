@@ -16,10 +16,13 @@ class Classifier(nn.Module):
             d = hidden_dim
         layers.append(nn.Linear(d, num_classes))
         self.head = nn.Sequential(*layers)
+        self.pool = nn.AdaptiveAvgPool2d(1)
         self._backbone_frozen = False
 
     def forward(self, x):
-        return self.head(self.backbone(x))
+        x = self.backbone(x)
+        x = self.pool(x).flatten(1)
+        return self.head(x)
 
     # --- SSL utilities ---
     def load_backbone(self, path: str):
