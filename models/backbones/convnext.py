@@ -110,7 +110,12 @@ class ConvNeXtBackbone(BaseBackbone):
         # 1. Stem
         if stem == "cifar":        # Small images (32x32)
             self.stem = nn.Sequential(
-                nn.Conv2d(3, dims[0], kernel_size=3, stride=1, padding=1),
+                nn.Conv2d(3, dims[0], kernel_size=3, stride=2),
+                LayerNorm(dims[0], eps=1e-6, data_format="channels_first")
+            )
+        elif stem == "small":      # images ~64 to 96 px : patchify 2x2
+            self.stem = nn.Sequential(
+                nn.Conv2d(3, dims[0], kernel_size=2, stride=2),
                 LayerNorm(dims[0], eps=1e-6, data_format="channels_first")
             )
         elif stem == "imagenet":   # Large images (>= 128px)

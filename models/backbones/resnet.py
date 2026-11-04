@@ -65,6 +65,9 @@ class ResNetBackbone(BaseBackbone):
         if stem == "cifar":        # small images (32x32)
             self.conv1 = nn.Conv2d(3, 64, 3, 1, 1, bias=False)
             self.maxpool = nn.Identity()
+        elif stem == "small":      # images ~64 to 96 px
+            self.conv1 = nn.Conv2d(3, 64, 3, 1, 1, bias=False)
+            self.maxpool = nn.MaxPool2d(3, 2, 1)
         elif stem == "imagenet":   # big images (>= 128px)
             self.conv1 = nn.Conv2d(3, 64, 7, 2, 3, bias=False)
             self.maxpool = nn.MaxPool2d(3, 2, 1)
