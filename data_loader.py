@@ -6,8 +6,35 @@ from torch.utils.data import DataLoader
 from typing import Tuple, Optional, List
 import inspect
 import json
+from PIL import Image
 
 from core.ssl.augmentations import TwoViewTransform
+
+_DATASET_SPLITS = {
+    "STL10": {"train": "train", "val": "test", "ssl": "unlabeled"},
+}
+
+class STL10Unlabeled(torch.utils.data.Dataset):
+    """STL-10 'unlabeled' (100 000 images 96x96) lu par memmap : pas de copie de 2,8 Go par worker."""
+
+    def __init__(self, root_dir: str, transform=None):
+        path = os.path.join(root_dir, "stl10_binary", "unlabeled_X.bin")
+        if not os.path.exists(path):                       # premier lancement : déclenche le téléchargement
+            datasets.STL10(root=root_dir, split="train", download=True)
+        self.path, self.transform = path, transform
+        self.n = os.path.getsize(path) // (3 * 96 * 96)
+        self._data = None                                  # ouvert dans chaque worker, jamais picklé
+
+    def __len__(self):
+        return self.n
+
+    def __getitem__(self, i):
+        if self._data is None:
+            self._data = np.memmap(self.path, dtype=np.uint8, mode="r", shape=(self.n, 3, 96, 96))
+        img = Image.fromarray(np.ascontiguousarray(np.transpose(self._data[i], (2, 1, 0))))
+        if self.transform is not None:
+            img = self.transform(img)
+        return img, -1                                     # pas de label
 
 
 def supports_download(dataset_class):
@@ -148,17 +175,26 @@ def _resolve_stats(dataset_class, root_dir, dataset_name, batch_size, image_size
 
 
 def _make_dataset(dataset_class, root_dir, split: str, transform, **dataset_kwargs):
-    """split : 'train' or 'val'."""
+    """
+    split : split logique -> 'train' (labellisé), 'val' (évaluation), 'ssl' (pré-entraînement).
+    """
     if not supports_download(dataset_class):             # ImageFolder : root/train, root/valid
-        folder = "train" if split == "train" else "valid"
+        folder = "train" if split in ("train", "ssl") else "valid"
         return dataset_class(os.path.join(root_dir, folder), transform=transform)
+
+    if dataset_class is datasets.STL10 and split == "ssl":
+        return STL10Unlabeled(root_dir, transform)
+    
+    split_map = _DATASET_SPLITS.get(dataset_class.__name__.upper(), {})
+    # STL10 : 'ssl' -> 'unlabeled', 'val' -> 'test'. Par défaut, 'ssl' -> 'train'.
+    tv_split = split_map.get(split, "train" if split == "ssl" else split)
 
     params = inspect.signature(dataset_class.__init__).parameters
     kw = dict(dataset_kwargs)
     if "train" in params:                                # CIFAR10, CIFAR100, etc.
-        kw["train"] = split == "train"
-    elif "split" in params:                              # Imagenette, etc. (STL10 uses 'test' instead of 'val')
-        kw["split"] = "train" if split == "train" else "val"
+        kw["train"] = tv_split in ("train", "ssl")
+    elif "split" in params:                              # STL10, Imagenette, etc.
+        kw["split"] = tv_split
     return dataset_class(root=root_dir, download=True, transform=transform, **kw)
 
 
@@ -260,17 +296,20 @@ def get_ssl_dataloaders(
     _, eval_tf = get_transforms(image_size, mean, std)
     two_view = TwoViewTransform(aug_cfg, image_size, mean, std)
 
-    ssl_set = _make_dataset(dataset_class, root_dir, "train", two_view, **dataset_kwargs)
+    ssl_set = _make_dataset(dataset_class, root_dir, "ssl", two_view, **dataset_kwargs)
     knn_train_set = _make_dataset(dataset_class, root_dir, "train", eval_tf, **dataset_kwargs)
     val_set = _make_dataset(dataset_class, root_dir, "val", eval_tf, **dataset_kwargs)
+
+    same_pool = len(ssl_set) == len(knn_train_set)
 
     if limit and knn_fraction < 1.0:
         raise ValueError("limit and knn_fraction cannot be used together; choose one")
 
-    if limit:      # Smoke-test mode: use the same subset for pretraining and the kNN bank
+    if limit:      # smoke : sous-ensemble du pré-entraînement
         idx = np.random.default_rng(seed).permutation(len(ssl_set))[:limit].tolist()
         ssl_set = torch.utils.data.Subset(ssl_set, idx)
-        knn_train_set = torch.utils.data.Subset(knn_train_set, idx)
+        if same_pool:                                   # même sous-ensemble pour la banque kNN
+            knn_train_set = torch.utils.data.Subset(knn_train_set, idx)
 
     # The kNN bank is restricted to the labeled images defined by the protocol (pretraining uses all images).
     knn_train_set = _stratified_subset(knn_train_set, knn_fraction, seed)

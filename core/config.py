@@ -35,8 +35,8 @@ class ModelConfig:
     def __post_init__(self):
         if "name" not in self.backbone:
             raise ValueError("model.backbone must contain a 'name' key")
-        if self.freeze_backbone and not self.pretrained_backbone:
-            raise ValueError("freeze_backbone=True only makes sense when pretrained_backbone is provided")
+        # if self.freeze_backbone and not self.pretrained_backbone:
+        #     raise ValueError("freeze_backbone=True only makes sense when pretrained_backbone is provided")
 
     @classmethod
     def from_dict(cls, d: Dict[str, Any]) -> "ModelConfig":
