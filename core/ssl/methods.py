@@ -7,6 +7,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from core.ssl.pooling import global_pool
+
 class SSLMethod(nn.Module):
     """Common interface: self.backbone (network to transfer), forward(v1, v2), after_step."""
     backbone: nn.Module
@@ -46,13 +48,17 @@ class BYOL(SSLMethod):
         self.tau_base = tau_base
         self.tau = tau_base
 
+    def _online(self, x):
+        return self.projector(global_pool(self.backbone(x)))
+
+    def _target(self, x):
+        return self.target_projector(global_pool(self.target_backbone(x)))
+
     def forward(self, v1, v2):
-        z1 = self.projector(self.backbone(v1))
-        z2 = self.projector(self.backbone(v2))
+        z1, z2 = self._online(v1), self._online(v2)
         p1, p2 = self.predictor(z1), self.predictor(z2)
         with torch.no_grad():
-            t1 = self.target_projector(self.target_backbone(v1))
-            t2 = self.target_projector(self.target_backbone(v2))
+            t1, t2 = self._target(v1), self._target(v2)
         loss = 0.5 * (_byol_loss(p1, t2) + _byol_loss(p2, t1))
         return {"loss": loss, "z": z1.detach()}
 

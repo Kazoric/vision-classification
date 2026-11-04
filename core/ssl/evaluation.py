@@ -1,6 +1,8 @@
 import torch
 import torch.nn.functional as F
 
+from core.ssl.pooling import global_pool
+
 
 @torch.no_grad()
 def extract_features(backbone, loader, device: str, amp: bool = True):
@@ -11,7 +13,7 @@ def extract_features(backbone, loader, device: str, amp: bool = True):
     feats, labels = [], []
     for images, y in loader:
         with torch.autocast(device_type=device_type, dtype=torch.bfloat16, enabled=amp):
-            f = backbone(images.to(device, non_blocking=True))
+            f = global_pool(backbone(images.to(device, non_blocking=True)))
         feats.append(F.normalize(f.float(), dim=1))
         labels.append(y.to(device))
     backbone.train(was_training)
