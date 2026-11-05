@@ -27,21 +27,21 @@ from data_loader import get_ssl_dataloaders, get_torchvision_dataset
 # ---------------------------------------------------------------
 # Settings
 # ---------------------------------------------------------------
-SMOKE = False                  # True: smoke test (2 SSL epochs on 5,000 images, 3 probe epochs)
+SMOKE = True                  # True: smoke test (2 SSL epochs on 5,000 images, 3 probe epochs)
 SEED = 42
 DATASET = "cifar10"
-IMAGE_SIZE = (32, 32)
+IMAGE_SIZE = (32, 32)      # STL10 est en 96x96 (CIFAR est en 32x32)
 USE_STATS = True               # Use the same normalization for SSL and the probe.
-BACKBONE = {"name": "resnet", "block": "basic", "layers": [2, 2, 2, 2], "stem": "cifar"}
+BACKBONE = {"name": "convnext", "depths": [2, 2, 6, 2], "dims": [64, 128, 256, 512], "stem": "cifar"}
 NUM_CLASSES = 10
 
-SSL_EPOCHS = 2 if SMOKE else 200
+SSL_EPOCHS = 2 if SMOKE else 100
 SSL_WARMUP = 0 if SMOKE else 10
 LIMIT = 5000 if SMOKE else None
 
 PROBE_EPOCHS = 3 if SMOKE else 50
 PROBE_BATCH = 256
-TRAIN_FRACTION = 0.1           # Fraction of labels used for the probe (0.1 / 0.01: low-label protocol)
+TRAIN_FRACTION = 0.01           # Fraction of labels used for the probe (0.1 / 0.01: low-label protocol)
 RUN_RANDOM_CONTROL = True      # Evaluate an untrained backbone as a baseline to beat.
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -61,8 +61,8 @@ def run_ssl():
         "experiment": {"dataset_name": DATASET, "seed": SEED},
         "data": {"image_size": list(IMAGE_SIZE)},
         "model": {"num_classes": NUM_CLASSES, "backbone": BACKBONE},
-        "training": {"lr": 0.05, "batch_size": 256, "epochs": SSL_EPOCHS, "warm_up_epochs": SSL_WARMUP},
-        "optimizer": {"type": "SGD", "params": {"momentum": 0.9, "weight_decay": 5.0e-4}},
+        "training": {"lr": 0.001, "batch_size": 128, "epochs": SSL_EPOCHS, "warm_up_epochs": SSL_WARMUP},
+        "optimizer": {"type": "AdamW", "params": {"weight_decay": 0.0001, "betas": [0.9, 0.999]}},
         "scheduler": {"type": "CosineAnnealingLR", "params": {"T_max": SSL_EPOCHS - SSL_WARMUP}},
         "ssl": {
             "method": "byol",
@@ -213,21 +213,21 @@ if __name__ == "__main__":
     t0 = time.time()
 
     ssl_dir, final_knn = run_ssl()
-    free_memory()
+    # free_memory()
 
-    results = {"Frozen BYOL": run_probe(os.path.join(ssl_dir, "backbone_last.pth"),
-                                        run_id="linearprobe_" + os.path.basename(ssl_dir))}
-    free_memory()
+    # results = {"Frozen BYOL": run_probe(os.path.join(ssl_dir, "backbone_last.pth"),
+    #                                     run_id="linearprobe_" + os.path.basename(ssl_dir))}
+    # free_memory()
 
-    if RUN_RANDOM_CONTROL:
-        rand_path = make_random_backbone("experiments/random_backbone.pth")
-        results["Frozen random"] = run_probe(rand_path, run_id="linearprobe_random_" +
-                                             datetime.now().strftime("%Y-%m-%d_%H-%M-%S"))
-        free_memory()
+    # if RUN_RANDOM_CONTROL:
+    #     rand_path = make_random_backbone("experiments/random_backbone.pth")
+    #     results["Frozen random"] = run_probe(rand_path, run_id="linearprobe_random_" +
+    #                                          datetime.now().strftime("%Y-%m-%d_%H-%M-%S"))
+    #     free_memory()
 
     print("\n" + "=" * 52)
-    print(f"Summary (labels used for the probe: {TRAIN_FRACTION:.0%}) | total duration {time.time() - t0:.0f} s")
+    # print(f"Summary (labels used for the probe: {TRAIN_FRACTION:.0%}) | total duration {time.time() - t0:.0f} s")
     print(f"  Final SSL kNN accuracy      : {final_knn:.4f}")
-    for name, r in results.items():
-        print(f"  Linear probe {name:<16}: last epoch {r['last']:.4f} | best {r['best']:.4f}")
+    # for name, r in results.items():
+    #     print(f"  Linear probe {name:<16}: last epoch {r['last']:.4f} | best {r['best']:.4f}")
     print("=" * 52)
