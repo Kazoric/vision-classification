@@ -68,7 +68,7 @@ class SchedulerConfig:
 class MetricsConfig:
     monitor_metric: str = "Top-1 Accuracy"
     monitor_mode: str = "max"
-    configs: Dict[str, Any] = field(
+    metric_functions: Dict[str, Any] = field(
         default_factory=lambda: {"Top-1 Accuracy": ("topk_accuracy_torch", {"k": 1})}
     )
 
@@ -142,9 +142,11 @@ class Config:
         monitor_metric = metrics_raw.pop("monitor_metric", "Top-1 Accuracy")
         monitor_mode = metrics_raw.pop("monitor_mode", "max")
 
-        metrics = MetricsConfig(monitor_metric=monitor_metric, monitor_mode=monitor_mode)
+        metric_functions = metrics_raw.pop("metric_functions", None)
+
+        metrics = MetricsConfig(monitor_metric=monitor_metric, monitor_mode=monitor_mode, metric_functions=metric_functions)
         if metrics_raw:  # Otherwise, keep the default metric configuration.
-            metrics.configs = metrics_raw
+            metrics.metric_functions = metrics_raw
 
         return cls(
             experiment=ExperimentConfig(**d["experiment"]),
@@ -154,5 +156,5 @@ class Config:
             scheduler=SchedulerConfig(**d.get("scheduler", {})),
             data=DataConfig(**d.get("data", {})),
             metrics=metrics,
-            ssl=SSLConfig.from_dict(d["ssl"]) if "ssl" in d else None,
+            ssl=SSLConfig.from_dict(d["ssl"]) if d.get("ssl") is not None else None,
         )

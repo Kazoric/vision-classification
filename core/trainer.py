@@ -116,7 +116,7 @@ class Trainer:
         if metrics_config is None:
             return {}
         resolved = {}
-        for name, spec in metrics_config.configs.items():
+        for name, spec in metrics_config.metric_functions.items():
             func, params = spec
             params = dict(params or {})
             if isinstance(func, str):
@@ -266,7 +266,7 @@ class Trainer:
                 "monitor_value": current_value,
             }
             if self.on_best_model is not None:
-                self.on_best_model(epoch + 1, current_value)
+                self.on_best_model(epoch + 1, current_value, self.monitor_metric)
 
     def get_final_metrics(self) -> dict:
         return self.best_epoch_metrics
