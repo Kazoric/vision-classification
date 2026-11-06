@@ -95,3 +95,6 @@ class MobileNetBackbone(BaseBackbone):
     @property
     def feature_dim(self) -> int:
         return self._feature_dim
+
+    def get_target_layer(self):
+        return self.features[-1]

@@ -21,3 +21,10 @@ class BaseBackbone(nn.Module, ABC):
     @abstractmethod
     def feature_dim(self) -> int:
         pass
+
+    @abstractmethod
+    def get_target_layer(self) -> nn.Module:
+        """
+        Returns the layer used as target for Grad-CAM.
+        """
+        pass

@@ -59,3 +59,10 @@ class VGGBackbone(BaseBackbone):
     @property
     def feature_dim(self) -> int:
         return self._feature_dim
+
+    def get_target_layer(self) -> nn.Module:
+        for layer in reversed(self.layers):
+            if isinstance(layer, nn.Conv2d):
+                return layer
+
+        raise RuntimeError("No convolutional layer found in VGG")

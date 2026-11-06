@@ -182,6 +182,9 @@ class ConvNeXtBackbone(BaseBackbone):
     def feature_dim(self) -> int:
         return self._feature_dim
 
+    def get_target_layer(self):
+        return self.stages[-1][-1].dwconv
+
 
 @register_backbone("convnext_atto")
 def convnextv2_atto(**kwargs):

@@ -117,3 +117,13 @@ class DenseNetBackbone(BaseBackbone):
     @property
     def feature_dim(self) -> int:
         return self._feature_dim
+
+    def get_target_layer(self):
+        last_block = self.blocks[-1]
+
+        if not isinstance(last_block, DenseBlock):
+            raise RuntimeError("Last block is not a DenseBlock")
+
+        last_dense_layer = last_block.layers[-1]
+
+        return last_dense_layer.layer[5]

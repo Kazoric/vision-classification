@@ -118,6 +118,14 @@ class ResNetBackbone(BaseBackbone):
     def feature_dim(self) -> int:
         return self._feature_dim
 
+    def get_target_layer(self):
+        last_block = self.stages[-1][-1]
+
+        if isinstance(last_block, Bottleneck):
+            return last_block.conv3
+
+        return last_block.conv2
+
 
 @register_backbone("resnet18")
 def resnet18(**kwargs) -> ResNetBackbone:

@@ -9,7 +9,7 @@ class GradCAM:
     """
     def __init__(self, model, target_layer):
         # Assuming model is your wrapper, we access the architecture via .model
-        self.model = model.model.eval()
+        self.model = model.net.eval()
         self.target_layer = target_layer
         self.gradients = None
         self.activations = None
