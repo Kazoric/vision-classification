@@ -26,13 +26,16 @@ yaml_config = {
     "training": {"lr": 0.01, "batch_size": 256, "epochs": 10, "warm_up_epochs": 0, "label_smoothing": 0.1},
     "optimizer": {"type": "AdamW", "params": {"weight_decay": 0.0001, "betas": [0.9, 0.999]}},
     "scheduler": {"type": "CosineAnnealingLR", "params": {"T_max": 10}},   # epochs - warm_up
-    "metrics": {
-        "monitor_metric": "Top-1 Accuracy",
-        "Top-1 Accuracy": ["topk_accuracy_torch", {"k": 1}],
-        "Top-5 Accuracy": ("topk_accuracy_torch", {"k": 5}),
-        "F1": ("f1_score_torch", {"num_classes": 10}),
-        "Precision": ("precision_score_torch", {"num_classes": 10}),
-        "Recall": ("recall_score_torch", {"num_classes": 10}),
+    'metrics': {
+        'monitor_metric': 'Top_1_Accuracy',
+        'monitor_mode': 'max',
+        'metric_functions': {
+            'Top_1_Accuracy': ['topk_accuracy_torch', {'k': 1}],
+            'Top-5 Accuracy': ['topk_accuracy_torch', {'k': 5}],
+            'Precision': ['precision_score_torch', {'num_classes': 10}],
+            'Recall': ['recall_score_torch', {'num_classes': 10}],
+            'F1': ['f1_score_torch', {'num_classes': 10}]
+        }
     }
 }
 
@@ -63,7 +66,7 @@ if __name__ == "__main__":
         model=model,
         config=config,
         device=device,
-        metrics_config=config.metrics if config.metrics.configs else None,
+        metrics_config=config.metrics if config.metrics.metric_functions else None,
     )
 
     # Setup the CheckpointManager to save and load training state.
