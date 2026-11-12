@@ -5,6 +5,7 @@ from . import mobilenet
 from . import densenet
 from . import resnet
 from . import convnext
+from . import convnextv2
 from . import vit
 
 __all__ = [

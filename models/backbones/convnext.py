@@ -187,12 +187,12 @@ class ConvNeXtBackbone(BaseBackbone):
 
 
 @register_backbone("convnext_atto")
-def convnextv2_atto(**kwargs):
+def convnext_atto(**kwargs):
     model = ConvNeXtBackbone(depths=[2, 2, 6, 2], dims=[40, 80, 160, 320], **kwargs)
     return model
 
 @register_backbone("convnext_femto")
-def convnextv2_femto(**kwargs):
+def convnext_femto(**kwargs):
     model = ConvNeXtBackbone(depths=[2, 2, 6, 2], dims=[48, 96, 192, 384], **kwargs)
     return model
 
@@ -202,63 +202,31 @@ def convnext_pico(**kwargs):
     return model
 
 @register_backbone("convnext_nano")
-def convnextv2_nano(**kwargs):
+def convnext_nano(**kwargs):
     model = ConvNeXtBackbone(depths=[2, 2, 8, 2], dims=[80, 160, 320, 640], **kwargs)
     return model
 
 @register_backbone("convnext_tiny")
-def convnextv2_tiny(**kwargs):
+def convnext_tiny(**kwargs):
     model = ConvNeXtBackbone(depths=[3, 3, 9, 3], dims=[96, 192, 384, 768], **kwargs)
     return model
 
 @register_backbone("convnext_small")
-def convnextv2_small(**kwargs):
+def convnext_small(**kwargs):
     model = ConvNeXtBackbone(depths=[3, 3, 27, 3], dims=[96, 192, 384, 768], **kwargs)
     return model
 
 @register_backbone("convnext_base")
-def convnextv2_base(**kwargs):
+def convnext_base(**kwargs):
     model = ConvNeXtBackbone(depths=[3, 3, 27, 3], dims=[128, 256, 512, 1024], **kwargs)
     return model
 
 @register_backbone("convnext_large")
-def convnextv2_large(**kwargs):
+def convnext_large(**kwargs):
     model = ConvNeXtBackbone(depths=[3, 3, 27, 3], dims=[192, 384, 768, 1536], **kwargs)
     return model
 
 @register_backbone("convnext_huge")
-def convnextv2_huge(**kwargs):
+def convnext_huge(**kwargs):
     model = ConvNeXtBackbone(depths=[3, 3, 27, 3], dims=[352, 704, 1408, 2816], **kwargs)
     return model
-
-# @register_backbone("convnext_tiny")
-# def convnext_tiny(**kwargs) -> ConvNeXtBackbone:
-#     return ConvNeXtBackbone(
-#         depths=(3, 3, 9, 3),
-#         dims=(96, 192, 384, 768),
-#         **kwargs,
-#     )
-
-# @register_backbone("convnext_small")
-# def convnext_small(**kwargs) -> ConvNeXtBackbone:
-#     return ConvNeXtBackbone(
-#         depths=(3, 3, 27, 3),
-#         dims=(96, 192, 384, 768),
-#         **kwargs,
-#     )
-
-# @register_backbone("convnext_base")
-# def convnext_base(**kwargs) -> ConvNeXtBackbone:
-#     return ConvNeXtBackbone(
-#         depths=(3, 3, 27, 3),
-#         dims=(128, 256, 512, 1024),
-#         **kwargs,
-#     )
-
-# @register_backbone("convnext_large")
-# def convnext_large(**kwargs) -> ConvNeXtBackbone:
-#     return ConvNeXtBackbone(
-#         depths=(3, 3, 27, 3),
-#         dims=(192, 384, 768, 1536),
-#         **kwargs,
-#     )
