@@ -67,21 +67,22 @@ class SSLTrainer:
             std_sum = torch.zeros((), device=self.device)
 
             pbar = tqdm(loader, desc=f"Epoch {epoch + 1}/{epochs}")
-            for i, ((v1, v2), _) in enumerate(pbar):  # Labels are ignored.
-                v1 = v1.to(self.device, non_blocking=True)
-                v2 = v2.to(self.device, non_blocking=True)
+            for i, (views, _) in enumerate(pbar):
+                views = [v.to(self.device, non_blocking=True) for v in views]
 
                 self.optimizer.zero_grad(set_to_none=True)
                 with torch.autocast(device_type=self.device_type, dtype=torch.bfloat16,
                                     enabled=self.amp):
-                    out = self.method(v1, v2)
+                    out = self.method(*views)
                 out["loss"].backward()
                 self.optimizer.step()
                 self.method.after_step(it / total)
                 it += 1
 
                 loss_sum += out["loss"].detach()
-                std_sum += F.normalize(out["z"].float(), dim=1).std(dim=0).mean()
+                z = out.get("z")
+                if z is not None:
+                    std_sum += F.normalize(z.float(), dim=1).std(dim=0).mean()
                 if i % 50 == 0:
                     pbar.set_postfix({"loss": f"{out['loss'].item():.4f}"})
 
