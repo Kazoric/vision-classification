@@ -10,7 +10,7 @@ from PIL import Image
 from torch.utils.data import DataLoader
 from torchvision import datasets, transforms
 
-from core.ssl.augmentations import TwoViewTransform
+from core.ssl.augmentations import MultiViewTransform
 
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff", ".webp"}
 
@@ -318,11 +318,12 @@ def get_ssl_dataloaders(
     limit: Optional[int] = None,        # Random training subset (smoke-test mode)
     knn_fraction: float = 1.0,          # Fraction of labels to use in the kNN bank (stratified)
     seed: int = 42,
+    num_views: int = 2,
     **dataset_kwargs
 ):
     """
     Returns (ssl_loader, knn_train_loader, val_loader, class_names):
-      - ssl_loader       : 'ssl' split, two augmented views per image, labels ignored
+      - ssl_loader       : 'ssl' split, num_views augmented views per image, labels ignored
       - knn_train_loader : labeled 'train' split without augmentation (kNN bank)
       - val_loader       : 'val' split without augmentation
     """
@@ -330,9 +331,9 @@ def get_ssl_dataloaders(
     mean, std = _resolve_stats(source, root_dir, dataset_name, batch_size,
                                image_size, use_computed_stats, **dataset_kwargs)
     _, eval_tf = get_transforms(image_size, mean, std)
-    two_view = TwoViewTransform(aug_cfg, image_size, mean, std)
+    ssl_tf  = MultiViewTransform(aug_cfg, image_size, mean, std, num_views)
 
-    ssl_set = _make_dataset(source, root_dir, "ssl", two_view, **dataset_kwargs)
+    ssl_set = _make_dataset(source, root_dir, "ssl", ssl_tf, **dataset_kwargs)
     knn_train_set = _make_dataset(source, root_dir, "train", eval_tf, **dataset_kwargs)
     val_set = _make_dataset(source, root_dir, "val", eval_tf, **dataset_kwargs)
 

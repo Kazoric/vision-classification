@@ -6,7 +6,7 @@ from typing import Tuple, List, Optional, Dict, Any
 from .base import BaseBackbone
 from .registry import register_backbone
 
-# --- ConvNeXt Utilities ---
+# --- ConvNeXtV2 Utilities ---
 
 class LayerNorm(nn.Module):
     """
@@ -67,7 +67,7 @@ class DropPath(nn.Module):
         return drop_path(x, self.drop_prob, self.training, self.scale_by_keep)
 
 
-class ConvNeXtBlock(nn.Module):
+class ConvNeXtV2Block(nn.Module):
     """ ConvNeXt V2 Block """
     def __init__(self, dim, drop_path=0.):
         super().__init__()
@@ -86,9 +86,12 @@ class ConvNeXtBlock(nn.Module):
         # 4. Stochastic Depth
         self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
 
-    def forward(self, x):
+    def forward(self, x, keep=None):
         input = x
         x = self.dwconv(x)
+
+        if keep is not None:
+            x = x * keep
         
         # Switch to channels_last format for LN and Linear layers
         x = x.permute(0, 2, 3, 1) 
@@ -96,108 +99,80 @@ class ConvNeXtBlock(nn.Module):
         
         x = self.pwconv1(x)
         x = self.act(x)
+        if keep is not None:
+            x = x * keep.permute(0, 2, 3, 1)
         x = self.grn(x)
         x = self.pwconv2(x)
             
         # Switch back to channels_first format
         x = x.permute(0, 3, 1, 2) 
+        if keep is not None:
+            x = x * keep
 
         x = input + self.drop_path(x)
         return x
 
 
-@register_backbone("convnextv2")
-class ConvNeXtV2Backbone(BaseBackbone):
-
-    def __init__(
-        self,
-        depths: Tuple[int, ...] = (3, 3, 9, 3),
-        dims: Tuple[int, ...] = (96, 192, 384, 768),
-        stem: str = "cifar",
-        drop_path_rate: float = 0.0,
-        **kwargs
-    ):
+class _MaskedBlocks(nn.Module):
+    def __init__(self, blocks):
         super().__init__()
-        self.depths = depths
-        self.dims = dims
-
-        # 1. Stem
-        if stem == "cifar":        # Small images (32x32)
-            self.stem = nn.Sequential(
-                nn.Conv2d(3, dims[0], kernel_size=3, stride=2),
-                LayerNorm(dims[0], eps=1e-6, data_format="channels_first")
-            )
-        elif stem == "small":      # images ~64 to 96 px : patchify 2x2
-            self.stem = nn.Sequential(
-                nn.Conv2d(3, dims[0], kernel_size=2, stride=2),
-                LayerNorm(dims[0], eps=1e-6, data_format="channels_first")
-            )
-        elif stem == "imagenet":   # Large images (>= 128px)
-            self.stem = nn.Sequential(
-                nn.Conv2d(3, dims[0], kernel_size=4, stride=4),
-                LayerNorm(dims[0], eps=1e-6, data_format="channels_first")
-            )
-        else:
-            raise ValueError(f"Unknown stem type: {stem}")
-
-        # 2. Stochastic depth rates distributed across blocks
-        dp_rates = [x.item() for x in torch.linspace(0, drop_path_rate, sum(depths))]
-        cur_dp = 0
-
-        # 3. Stages
-        stages_list = []
-        in_dim = dims[0]
-        for i, (out_dim, depth) in enumerate(zip(dims, depths)):
-            stage_dp_rates = dp_rates[cur_dp : cur_dp + depth]
-            cur_dp += depth
-            
-            stage = self._make_stage(in_dim=in_dim, out_dim=out_dim, depth=depth, dp_rates=stage_dp_rates, is_first=(i == 0))
-            stages_list.append(stage)
-            in_dim = out_dim
-
-        self.stages = nn.Sequential(*stages_list)
-
-        # 4. Final normalization & pooling
-        self.norm = LayerNorm(dims[-1], eps=1e-6, data_format="channels_first")
-        
-        self._feature_dim = dims[-1]
-        self._init_weights()
-
-    def _make_stage(self, in_dim: int, out_dim: int, depth: int, dp_rates: List[float], is_first: bool) -> nn.Sequential:
-        layers = []
-        # Downsampling between stages (except for the first stage handled by the stem)
-        if not is_first:
-            layers.append(
-                nn.Sequential(
-                    LayerNorm(in_dim, eps=1e-6, data_format="channels_first"),
-                    nn.Conv2d(in_dim, out_dim, kernel_size=2, stride=2)
-                )
-            )
-
-        # ConvNeXt blocks
-        for j in range(depth):
-            layers.append(ConvNeXtBlock(dim=out_dim, drop_path=dp_rates[j]))
-        return nn.Sequential(*layers)
-
-    def _init_weights(self):
-        for m in self.modules():
-            if isinstance(m, (nn.Conv2d, nn.Linear)):
-                nn.init.trunc_normal_(m.weight, std=0.02)
-                if m.bias is not None:
-                    nn.init.zeros_(m.bias)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = self.stem(x)
-        x = self.stages(x)
-        x = self.norm(x)
+        self.blocks = nn.ModuleList(blocks)
+ 
+    def forward(self, x, keep=None):
+        for b in self.blocks:
+            x = b(x, keep)
         return x
 
+@register_backbone("convnextv2")
+class ConvNeXtV2Backbone(nn.Module):
+    def __init__(self, depths=(2, 2, 6, 2), dims=(64, 128, 256, 512), stem="imagenet"):
+        super().__init__()
+        self.stem_stride = {"cifar": 1, "small": 2, "imagenet": 4}[stem]
+        k = self.stem_stride
+        self.stem = nn.Sequential(nn.Conv2d(3, dims[0], k, k) if k > 1 else nn.Conv2d(3, dims[0], 3, 1, 1),
+                                  LayerNorm(dims[0], data_format="channels_first"))
+        self.downsamples = nn.ModuleList([nn.Identity()] + [
+            nn.Sequential(LayerNorm(dims[i - 1], data_format="channels_first"), nn.Conv2d(dims[i - 1], dims[i], 2, 2))
+            for i in range(1, len(dims))])
+        self.stages = nn.ModuleList([_MaskedBlocks([ConvNeXtV2Block(d) for _ in range(n)]) for n, d in zip(depths, dims)])
+        self.norm = LayerNorm(dims[-1], data_format="channels_first")
+        self._dims = dims
+        self.apply(self._init)
+ 
+    @staticmethod
+    def _init(m):
+        if isinstance(m, (nn.Conv2d, nn.Linear)):
+            nn.init.trunc_normal_(m.weight, std=0.02)
+            nn.init.zeros_(m.bias)
+ 
     @property
-    def feature_dim(self) -> int:
-        return self._feature_dim
-
-    def get_target_layer(self):
-        return self.stages[-1][-1].dwconv
+    def feature_dim(self):
+        return self._dims[-1]
+ 
+    @property
+    def total_stride(self):
+        return self.stem_stride * 2 ** (len(self._dims) - 1)
+ 
+    def make_block(self, dim):
+        return ConvNeXtV2Block(dim)
+ 
+    def forward(self, x, mask=None):
+        """mask : [B, 1, h, w], 1 = masked."""
+        n = len(self.stages)
+        keep_last = None if mask is None else 1.0 - mask
+        keep_of = lambda i: None if keep_last is None else keep_last.repeat_interleave(2 ** (n - 1 - i), 2).repeat_interleave(2 ** (n - 1 - i), 3).to(x.dtype)
+        if mask is not None:
+            keep0 = keep_of(0)
+            x = x * keep0.repeat_interleave(self.stem_stride, 2).repeat_interleave(self.stem_stride, 3)  # pixels masqués = 0
+        x = self.stem(x)
+        for i, (down, stage) in enumerate(zip(self.downsamples, self.stages)):
+            keep = keep_of(i)
+            x = down(x)
+            if keep is not None:
+                x = x * keep
+            x = stage(x, keep)
+        x = self.norm(x)
+        return x
 
 
 @register_backbone("convnextv2_atto")
