@@ -17,7 +17,11 @@ from core.utils import generate_run_id, set_seed
 from data_loader import get_torchvision_dataset
 
 yaml_config = {
-    "experiment": {"dataset_name": "cifar10"},
+    "experiment": {
+        "dataset_name": "cifar10",
+        "save_checkpoints": False,
+        "seed": 42
+    },
     "data": {
         "image_size": [32, 32],
     },
@@ -25,7 +29,7 @@ yaml_config = {
         "num_classes": 10,
         "backbone": {"name": "resnet18", "stem": "cifar"},
     },
-    "training": {"lr": 0.01, "batch_size": 256, "epochs": 10, "warm_up_epochs": 0, "label_smoothing": 0.1},
+    "training": {"lr": 0.01, "batch_size": 256, "epochs": 5, "warm_up_epochs": 0, "label_smoothing": 0.1},
     "optimizer": {"type": "AdamW", "params": {"weight_decay": 0.0001, "betas": [0.9, 0.999]}},
     "scheduler": {"type": "CosineAnnealingLR", "params": {"T_max": 10}},   # epochs - warm_up
     'metrics': {
@@ -52,6 +56,8 @@ if __name__ == "__main__":
         )
         config.experiment.run_id = run_id
 
+    set_seed(config.experiment.seed)
+
     # Determine the computation device (CUDA if available, otherwise CPU).
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -74,18 +80,20 @@ if __name__ == "__main__":
     print(f"  Parameters    : {sum(p.numel() for p in model.parameters()):,}")
 
     # Setup the CheckpointManager to save and load training state.
-    checkpoint = CheckpointManager(
-        run_id=config.experiment.run_id,
-        model_name=config.model.backbone['name'],
-    )
+    checkpoint = None
+    if config.experiment.save_checkpoints:
+        checkpoint = CheckpointManager(
+            run_id=config.experiment.run_id,
+            model_name=config.model.backbone['name'],
+        )
     
     trainer = Trainer.from_config(
         model=model,
         config=config,
         device=device,
         metrics_config=config.metrics if config.metrics.metric_functions else None,
-        on_best_model=checkpoint.save_best,
-        on_epoch_end=checkpoint.save_last,
+        on_best_model=checkpoint.save_best if checkpoint else None,
+        on_epoch_end=checkpoint.save_last if checkpoint else None,
     )
 
     # Log the unique run identifier.
