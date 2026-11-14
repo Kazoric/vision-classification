@@ -118,6 +118,6 @@ if __name__ == "__main__":
     print(f"Training took {end_time:.2f} seconds\n")
     y, logits = trainer.collect_predictions(val_loader)
     cm = confusion_matrix_torch(y, logits, config.model.num_classes)
-    visualizer.plot_confusion_matrix(cm, train_loader.dataset.classes, run_id=model.run_id)
+    visualizer.plot_confusion_matrix(cm, train_loader.dataset.classes, model_name=model.name, run_id=model.run_id)
     visualizer.plot_metrics(trainer, model.run_id)
     trainer.save_hyperparams()
