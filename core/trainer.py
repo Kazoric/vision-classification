@@ -29,7 +29,8 @@ class Trainer:
         criterion: Optional[nn.Module] = None,
         scheduler: Optional[LRScheduler] = None,
         metrics_config: Optional[Any] = None,
-        on_best_model: Optional[Callable[[int, float], None]] = None,
+        on_best_model: Optional[Callable[[nn.Module, torch.optim.Optimizer, int, float, str], None]] = None,
+        on_epoch_end: Optional[Callable[[nn.Module, torch.optim.Optimizer, int, float, str], None]] = None,
         config: Optional[Any] = None,
         run_id: Optional[str] = None,
         amp: bool = False,
@@ -40,16 +41,15 @@ class Trainer:
         self.criterion = criterion if criterion is not None else model.criterion
         self.scheduler = scheduler
         self.on_best_model = on_best_model
+        self.on_epoch_end = on_epoch_end
         self.config = config
         self.amp = amp
         self.device_type = "cuda" if "cuda" in str(device) else "cpu"
 
-        # --- Run ID: prioritize the model's run ID ---
-        if run_id is None:
-            run_id = getattr(model, "run_id", None)
-        if run_id is None and config is not None:
-            run_id = getattr(config.experiment, "run_id", None)
-        self.run_id = run_id or f"run_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        # --- Run ID ---
+        if not run_id:
+            raise ValueError("Missing experiment.run_id in configuration.")
+        self.run_id = run_id
 
         # --- Metrics: {name: (function, parameters)} ---
         self.num_classes = num_classes if num_classes is not None else getattr(model, "num_classes", None)
@@ -72,8 +72,8 @@ class Trainer:
 
         # --- Internal state ---
         self.start_epoch = 0
-        self.best_metric_value = float("-inf") if self.monitor_mode == "max" else float("inf")
-        self.best_epoch_metrics: dict = {}
+        self.best_monitor_value = float("-inf") if self.monitor_mode == "max" else float("inf")
+        self.best_epoch: dict = {}
 
     # ------------------------------------------------------------------
     # Initialization
@@ -85,7 +85,8 @@ class Trainer:
         model: nn.Module,
         config: Any,
         device: Optional[str] = None,
-        on_best_model: Optional[Callable[[int, float], None]] = None,
+        on_best_model: Optional[Callable[[nn.Module, torch.optim.Optimizer, int, float, str], None]] = None,
+        on_epoch_end: Optional[Callable[[nn.Module, torch.optim.Optimizer, int, float, str], None]] = None,
         metrics_config: Optional[Any] = None,
     ) -> "Trainer":
         device = device or ("cuda" if torch.cuda.is_available() else "cpu")
@@ -105,6 +106,7 @@ class Trainer:
             scheduler=scheduler,
             metrics_config=metrics_config if metrics_config is not None else config.metrics,
             on_best_model=on_best_model,
+            on_epoch_end=on_epoch_end,
             config=config,
             run_id=getattr(config.experiment, "run_id", None),
             amp=getattr(config.training, "amp", False),
@@ -181,7 +183,13 @@ class Trainer:
 
             if val_loader is not None:
                 val_loss, val_metrics = self.evaluate(val_loader)
-                self._maybe_save_best(epoch, val_loss, val_metrics)
+                current_value = self._get_current_value(val_loss, val_metrics)
+                self._maybe_save_best(epoch, current_value, val_loss, val_metrics)
+            else:
+                current_value = epoch_loss
+
+            if self.on_epoch_end is not None:
+                self.on_epoch_end(model=self.model, optimizer=self.optimizer, epoch=epoch + 1, value=current_value, monitor=self.monitor_metric)
 
             if self.scheduler is not None:
                 self.scheduler.step()
@@ -236,7 +244,7 @@ class Trainer:
             with self._autocast():
                 out = self.model(images.to(self.device, non_blocking=True))
             logits_all.append(out.float().cpu())
-            labels_all.append(labels)
+            labels_all.append(labels.cpu())
         return torch.cat(labels_all), torch.cat(logits_all)
 
     @staticmethod
@@ -245,18 +253,20 @@ class Trainer:
 
     def _is_better(self, value: float) -> bool:
         if self.monitor_mode == "max":
-            return value > self.best_metric_value
-        return value < self.best_metric_value
+            return value > self.best_monitor_value
+        return value < self.best_monitor_value
 
-    def _maybe_save_best(self, epoch: int, val_loss: float, val_metrics: dict) -> None:
+    def _get_current_value(self, val_loss: float, val_metrics: dict):
         if self.monitor_metric in ("loss", "val_loss"):
             current_value = val_loss
         else:
             current_value = val_metrics[self.monitor_metric]
+        return current_value
 
+    def _maybe_save_best(self, epoch: int, current_value: float, val_loss: float, val_metrics: dict) -> None:
         if self._is_better(current_value):
-            self.best_metric_value = current_value
-            self.best_epoch_metrics = {
+            self.best_monitor_value = current_value
+            self.best_epoch = {
                 "epoch": epoch + 1,
                 "train_loss": self.train_loss[-1],
                 "val_loss": val_loss,
@@ -266,14 +276,14 @@ class Trainer:
                 "monitor_value": current_value,
             }
             if self.on_best_model is not None:
-                self.on_best_model(epoch + 1, current_value, self.monitor_metric)
+                self.on_best_model(model=self.model, epoch=epoch + 1, value=current_value, monitor=self.monitor_metric)
 
     def get_final_metrics(self) -> dict:
-        return self.best_epoch_metrics
+        return self.best_epoch
 
-    def resume_from(self, epoch: int, best_metric_value: float) -> None:
+    def resume_from(self, epoch: int, best_monitor_value: float) -> None:
         self.start_epoch = epoch
-        self.best_metric_value = best_metric_value
+        self.best_monitor_value = best_monitor_value
 
     # ------------------------------------------------------------------
     # Metadata
@@ -288,11 +298,11 @@ class Trainer:
         if isinstance(meta.get("experiment"), dict):
             meta["experiment"]["run_id"] = self.run_id
 
-        results = extra_results if extra_results is not None else self.best_epoch_metrics
+        results = extra_results if extra_results is not None else self.best_epoch
         if results:
             meta["results"] = {
                 "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                "best_validation_results": results,
+                "best_results": results,
             }
 
         path = os.path.join("experiments", self.run_id, "meta.json")

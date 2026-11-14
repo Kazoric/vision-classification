@@ -11,9 +11,11 @@ from core.checkpoint import CheckpointManager
 from core.visualizer import Visualizer
 from core.model_base import Model
 from core.metrics import confusion_matrix_torch
+from core.utils import generate_run_id, set_seed
 
 # Data and Model imports
 from data_loader import get_torchvision_dataset
+
 yaml_config = {
     "experiment": {"dataset_name": "cifar10"},
     "data": {
@@ -42,6 +44,14 @@ yaml_config = {
 if __name__ == "__main__":
     config = Config.from_dict(yaml_config)
 
+    # Set run_id
+    if config.experiment.run_id is None:
+        run_id = generate_run_id(
+            model_name=config.model.backbone['name'],
+            dataset_name=config.experiment.dataset_name,
+        )
+        config.experiment.run_id = run_id
+
     # Determine the computation device (CUDA if available, otherwise CPU).
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -62,26 +72,24 @@ if __name__ == "__main__":
     # Log model specifics like name and total parameters.
     print(f"  Model        : {model.name}")
     print(f"  Parameters    : {sum(p.numel() for p in model.parameters()):,}")
+
+    # Setup the CheckpointManager to save and load training state.
+    checkpoint = CheckpointManager(
+        run_id=config.experiment.run_id,
+        model_name=config.model.backbone['name'],
+    )
+    
     trainer = Trainer.from_config(
         model=model,
         config=config,
         device=device,
         metrics_config=config.metrics if config.metrics.metric_functions else None,
+        on_best_model=checkpoint.save_best,
+        on_epoch_end=checkpoint.save_last,
     )
-
-    # Setup the CheckpointManager to save and load training state.
-    checkpoint = CheckpointManager(
-        model=model,
-        optimizer=trainer.optimizer,
-        run_id=trainer.run_id,
-    )
-
-    # Configure the trainer to save the best model checkpoint.
-    if config.experiment.save_checkpoints:
-        trainer.on_best_model = checkpoint.save
 
     # Log the unique run identifier.
-    print(f"  Run ID        : {trainer.run_id}")
+    print(f"  Run ID        : {run_id}")
 
     # Initialize the Predictor and Visualizer components.
     predictor = Predictor(model=model, device=device)
