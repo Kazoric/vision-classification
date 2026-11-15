@@ -26,9 +26,9 @@ For each fraction of labels (1 %, 10 %, 100 %), four setups are compared on exac
 | | Starting backbone | What is trained |
 |---|---|---|
 | **A. Supervised** | random initialisation | whole network |
-| **B. Linear probe** | pre-trained BYOL, frozen | linear head only |
-| **C. Fine-tuning** | pre-trained BYOL | whole network |
-| **D. Random probe** | random initialisation, frozen | linear head only (floor) |
+| **B. Fine-tuning** | pre-trained BYOL | whole network |
+| **C. Linear probe** | pre-trained BYOL, frozen | linear head only |
+| **D. Random probe** | random initialisation, frozen | linear head only |
 
 Labelled subsets are **stratified and nested** for a given seed (the 1 % subset is contained in the 10 % subset), so comparisons are made at equal data.
 
@@ -38,21 +38,21 @@ Labelled subsets are **stratified and nested** for a given seed (the 1 % subset 
 
 Backbone: ResNet-18 backbone (BasicBlock, CIFAR stem, 512-d features), operating on 32×32 images. BYOL is pre-trained on the 50,000 training images **without labels**; 200 epochs; the labelled subsets are drawn from the same images.
 
-| Labels | A. Supervised | B. Fine-tuning BYOL | C. Probe BYOL | D. Probe random | C − A |
+| Labels | A. Supervised | B. Fine-tuning BYOL | C. Probe BYOL | D. Probe random | B − A |
 |---|---|---|---|---|---|
-| 1 % (500 images) | 41.2 | 80.7 | 71.9 | 27.8 | +30.8 |
-| 10 % (5,000 images) | 76.7 | 83.8 | 86.9 | 31.2 | +10.2 |
-| 100 % (50,000 images) | 93.6 | 84.7 | 94.6 | 35.9 | +1.0 |
+| 1 % (500 images) | 41.2 | 71.9 | 80.7 | 27.8 | +30.7 |
+| 10 % (5,000 images) | 76.7 | 86.9 | 83.8 | 31.2 | +10.2 |
+| 100 % (50,000 images) | 93.6 | 94.6 | 84.7 | 35.9 | +1.0 |
 
 ### STL-10
  
 Backbone: ResNet-18 backbone (BasicBlock, small stem, 512-d features), operating on 64×64 images. BYOL is pre-trained on the 100,000 unlabelled images; 100 epochs; labelled subsets come from the 5,000-image training split; evaluation on the 8,000-image test split.
- 
-| Labels | A. Supervised | B. Fine-tuning BYOL | C. Probe BYOL | D. Probe random | C − A |
+
+| Labels | A. Supervised | B. Fine-tuning BYOL | C. Probe BYOL | D. Probe random | B − A |
 |---|---|---|---|---|---|
-| 1 % (50 images) | 25.7 | 64.8 | 40.3 | 17.1 | +14.7 |
-| 10 % (500 images) | 45.0 | 70.4 | 72.4 | 16.6 | +27.4 |
-| 100 % (5,000 images) | 68.3 | 77.9 | 87.3 | 20.4 | +19.0 |
+| 1 % (50 images) | 25.7 | 40.3 | 64.8 | 17.1 | +14.6 |
+| 10 % (500 images) | 45.0 | 72.4 | 70.4 | 16.6 | +27.4 |
+| 100 % (5,000 images) | 68.3 | 87.3 | 77.9 | 20.4 | +19.0 |
 
 
 ### What these numbers show
