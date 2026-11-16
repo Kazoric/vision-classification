@@ -85,7 +85,7 @@ class CheckpointManager:
     ):
         checkpoint = {
             "model_state_dict": model.state_dict(),
-            "optimizer_state_dict": optimizer.state_dict(),
+            "optimizer_state_dict": optimizer.state_dict() if optimizer else None,
             "scheduler_state_dict": scheduler.state_dict() if scheduler else None,
             "epoch": epoch,
             "monitor": monitor,
@@ -98,6 +98,15 @@ class CheckpointManager:
         )
 
         torch.save(checkpoint, path)
+
+    def save_backbone(self, model: torch.nn.Module, checkpoint_type: str):
+    
+            path = os.path.join(
+                self.checkpoint_dir,
+                f"backbone_{checkpoint_type}.pt",
+            )
+    
+            torch.save(model.backbone.state_dict(), path)
 
     def load(
         self,

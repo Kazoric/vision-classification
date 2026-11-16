@@ -262,7 +262,7 @@ def _stratified_subset(dataset, fraction: float, seed: int):
     return subset
 
 
-def _loader_kwargs(num_workers: int, prefetch_factor: int = 4,
+def _loader_kwargs(num_workers: int, prefetch_factor: int = 2,
                    persistent_workers: bool = True) -> dict:
     kw = dict(num_workers=num_workers, pin_memory=True)
     if num_workers > 0:                       # These options cause errors when num_workers=0

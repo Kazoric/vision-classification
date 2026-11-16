@@ -8,7 +8,7 @@ import torch
 # Core module imports
 from core.config import Config
 from core.checkpoint import CheckpointManager
-from core.utils import set_seed
+from core.utils import set_seed, generate_run_id
 
 # SSL imports
 from models.backbones import build_backbone
@@ -26,7 +26,7 @@ from data_loader import get_ssl_dataloaders
 # ---------------------------------------------------------------
 # Settings
 # ---------------------------------------------------------------
-SMOKE = False                  # True: smoke test (2 SSL epochs on 5,000 images, 3 probe epochs)
+SMOKE = True                  # True: smoke test (2 SSL epochs on 5,000 images, 3 probe epochs)
 SEED = 42
 DATASET = "STL10"
 IMAGE_SIZE = (96, 96)
@@ -70,6 +70,7 @@ def run_ssl():
             "channels_last": True
         },
     })
+
     set_seed(SEED)
     torch.backends.cudnn.benchmark = True
     print(f"\n=== PHASE 1: SSL ({config.ssl.method}, {SSL_EPOCHS} epochs) | device={device} ===")
@@ -95,29 +96,33 @@ def run_ssl():
     print(f"  Backbone   : {backbone_name} ({backbone.feature_dim}-d)")
     print(f"  Parameters : {sum(p.numel() for p in method.parameters() if p.requires_grad):,} trainable")
 
-    run_id = (f"{config.ssl.method}_{backbone_name}_{DATASET}_"
-              f"{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}")
-    run_dir = os.path.join("experiments", run_id)
+    # Set run_id
+    if config.experiment.run_id is None:
+        exp_name = f"{config.ssl.method}_{backbone_name}"
+        run_id = generate_run_id(
+            model_name=exp_name,
+            dataset_name=config.experiment.dataset_name,
+        )
+        config.experiment.run_id = run_id
+
+    run_dir = os.path.join("experiments", config.experiment.run_id)
     os.makedirs(run_dir, exist_ok=True)
 
     mon = config.ssl.monitor
     monitor = make_knn_monitor(knn_train_loader, val_loader, device,
                                config.model.num_classes, mon.knn_k, mon.knn_temperature)
-    trainer = SSLTrainer.from_config(method, config, device, monitor_fn=monitor, run_id=run_id)
-    # checkpoint = CheckpointManager(model=method, optimizer=trainer.optimizer, run_id=run_id)
-
-    def on_best(epoch: int, knn_acc: float) -> None:
-        # checkpoint.save(epoch, 1 - knn_acc)
-        torch.save(method.backbone.state_dict(), os.path.join(run_dir, "backbone_best.pth"))
-
+    checkpoint = None
     if config.experiment.save_checkpoints:
-        trainer.on_best = on_best
+        checkpoint = CheckpointManager(
+            run_id=config.experiment.run_id,
+            model_name=config.model.backbone['name'],
+        )
+    trainer = SSLTrainer.from_config(method, config, device, monitor_fn=monitor, save_function=checkpoint.save_backbone if checkpoint else None)
 
     start = time.time()
     trainer.train(ssl_loader, epochs=config.training.epochs)
     print(f"Pretraining time: {time.time() - start:.0f} s")
 
-    torch.save(method.backbone.state_dict(), os.path.join(run_dir, "backbone_last.pth"))
     plot_ssl_curves(trainer, config.ssl.params["projection_dim"], os.path.join(run_dir, "ssl_curves.png"))
     final_knn = trainer.knn_history[-1][1]
     trainer.save_hyperparams(extra_results={"final_knn": final_knn})
