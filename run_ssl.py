@@ -16,6 +16,9 @@ from core.ssl.methods import build_ssl_method
 from core.ssl.evaluation import make_knn_monitor
 from core.ssl.ssl_trainer import SSLTrainer
 from core.ssl.plots import plot_ssl_curves
+from core.ssl.methods import SSL_METHODS
+
+# import core.ssl.methods.fcmae
 
 # Data imports
 from data_loader import get_ssl_dataloaders
@@ -25,10 +28,10 @@ from data_loader import get_ssl_dataloaders
 # ---------------------------------------------------------------
 SMOKE = False                  # True: smoke test (2 SSL epochs on 5,000 images, 3 probe epochs)
 SEED = 42
-DATASET = "cifar10"
-IMAGE_SIZE = (32, 32)
+DATASET = "STL10"
+IMAGE_SIZE = (96, 96)
 USE_STATS = True
-BACKBONE = {"name": "resnet18", "stem": "cifar"}
+BACKBONE = {"name": "resnet18", "stem": "small"}
 NUM_CLASSES = 10
 
 SSL_EPOCHS = 2 if SMOKE else 100
@@ -50,8 +53,10 @@ def run_ssl():
         "optimizer": {"type": "AdamW", "params": {"weight_decay": 0.0001, "betas": [0.9, 0.999]}},
         "scheduler": {"type": "CosineAnnealingLR", "params": {"T_max": SSL_EPOCHS - SSL_WARMUP}},
         "ssl": {
-            "method": "byol",
-            "params": {"projection_dim": 256, "hidden_dim": 1024, "tau_base": 0.99},
+            "method": "simsiam",
+            # "params": {"projection_dim": 256, "hidden_dim": 1024, "tau_base": 0.99},
+            # "params": {"mask_ratio": 0.6, "decoder_dim": 512, "decoder_depth": 1, "norm_pix_loss": True},
+            "params": {"projection_dim": 256, "hidden_dim": 1024},
             "augmentation": {
                 "crop_scale": [0.2, 1.0],
                 "color_jitter": [0.4, 0.4, 0.2, 0.1],
@@ -62,6 +67,7 @@ def run_ssl():
             },
             "monitor": {"knn_every": 1 if SMOKE else 10, "knn_k": 20, "knn_temperature": 0.1},
             "mixed_precision": True,
+            "channels_last": True
         },
     })
     set_seed(SEED)
@@ -77,6 +83,7 @@ def run_ssl():
         use_computed_stats=USE_STATS,
         limit=LIMIT,
         seed=SEED,
+        num_views=SSL_METHODS[config.ssl.method].num_views
     )
     assert class_names is None or config.model.num_classes == len(class_names), \
         f"num_classes={config.model.num_classes}, but the dataset has {len(class_names)} classes"
@@ -97,10 +104,10 @@ def run_ssl():
     monitor = make_knn_monitor(knn_train_loader, val_loader, device,
                                config.model.num_classes, mon.knn_k, mon.knn_temperature)
     trainer = SSLTrainer.from_config(method, config, device, monitor_fn=monitor, run_id=run_id)
-    checkpoint = CheckpointManager(model=method, optimizer=trainer.optimizer, run_id=run_id)
+    # checkpoint = CheckpointManager(model=method, optimizer=trainer.optimizer, run_id=run_id)
 
     def on_best(epoch: int, knn_acc: float) -> None:
-        checkpoint.save(epoch, 1 - knn_acc)
+        # checkpoint.save(epoch, 1 - knn_acc)
         torch.save(method.backbone.state_dict(), os.path.join(run_dir, "backbone_best.pth"))
 
     if config.experiment.save_checkpoints:

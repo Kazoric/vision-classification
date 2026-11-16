@@ -105,6 +105,7 @@ class SSLConfig:
     augmentation: SSLAugmentationConfig = field(default_factory=SSLAugmentationConfig)
     monitor: SSLMonitorConfig = field(default_factory=SSLMonitorConfig)
     mixed_precision: bool = True
+    channels_last: bool = False
 
     @classmethod
     def from_dict(cls, d: Dict[str, Any]) -> "SSLConfig":
@@ -114,6 +115,7 @@ class SSLConfig:
             augmentation=SSLAugmentationConfig(**d.get("augmentation", {})),
             monitor=SSLMonitorConfig(**d.get("monitor", {})),
             mixed_precision=d.get("mixed_precision", True),
+            channels_last=d.get("channels_last", True),
         )
 
 

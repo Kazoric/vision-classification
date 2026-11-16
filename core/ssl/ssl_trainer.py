@@ -19,7 +19,9 @@ class SSLTrainer:
                  scheduler: Optional[LRScheduler] = None,
                  monitor_fn: Optional[Callable] = None, monitor_every: int = 10,
                  on_best: Optional[Callable[[int, float], None]] = None,
-                 amp: bool = True, config: Optional[Any] = None,
+                 amp: bool = True, 
+                 channels_last: bool = False,
+                 config: Optional[Any] = None,
                  run_id: Optional[str] = None):
         self.method = method.to(device)
         self.optimizer, self.device, self.scheduler = optimizer, device, scheduler
@@ -33,15 +35,21 @@ class SSLTrainer:
         self.best_knn = float("-inf")
         self.start_epoch = 0
 
+        self.memory_format = torch.channels_last if channels_last else torch.contiguous_format
+        if "cuda" in str(device):
+            torch.backends.cudnn.benchmark = True
+
     @classmethod
     def from_config(cls, method, config, device=None, monitor_fn=None, on_best=None, run_id=None):
         device = device or ("cuda" if torch.cuda.is_available() else "cpu")
-        method = method.to(device)
+        mf = torch.channels_last if config.ssl.channels_last else torch.contiguous_format
+        method = method.to(device, memory_format=mf)
         optimizer = build_optimizer(method.parameters(), config)  # Ignore the target (requires_grad=False).
         scheduler = build_scheduler(optimizer, config)
         return cls(method, optimizer, device, scheduler, monitor_fn,
                    monitor_every=config.ssl.monitor.knn_every, on_best=on_best,
-                   amp=config.ssl.mixed_precision, config=config, run_id=run_id)
+                   amp=config.ssl.mixed_precision, config=config, run_id=run_id,
+                   channels_last=config.ssl.channels_last)
 
     def _run_monitor(self, epoch: int) -> None:
         acc = self.monitor_fn(self.method)
@@ -68,14 +76,20 @@ class SSLTrainer:
 
             pbar = tqdm(loader, desc=f"Epoch {epoch + 1}/{epochs}")
             for i, (views, _) in enumerate(pbar):
-                views = [v.to(self.device, non_blocking=True) for v in views]
+                views = [v.to(self.device, memory_format=self.memory_format, non_blocking=True) for v in views]
+
+                # torch.cuda.reset_peak_memory_stats()
 
                 self.optimizer.zero_grad(set_to_none=True)
+                # memory_stats("Before forward")
                 with torch.autocast(device_type=self.device_type, dtype=torch.bfloat16,
                                     enabled=self.amp):
                     out = self.method(*views)
+                # memory_stats("After forward")
                 out["loss"].backward()
+                # memory_stats("After backward")
                 self.optimizer.step()
+                # memory_stats("After optimizer")
                 self.method.after_step(it / total)
                 it += 1
 
@@ -121,3 +135,18 @@ class SSLTrainer:
         with open(path, "w", encoding="utf-8") as f:
             json.dump(meta, f, indent=4, ensure_ascii=False)
         print(f"[INFO] Configuration saved: {path}")
+
+
+def memory_stats(label):
+    torch.cuda.synchronize()
+
+    allocated = torch.cuda.memory_allocated() / 1024**3
+    reserved = torch.cuda.memory_reserved() / 1024**3
+    peak = torch.cuda.max_memory_allocated() / 1024**3
+
+    print(
+        f"{label:20s} | "
+        f"Allocated: {allocated:.2f} GB | "
+        f"Reserved: {reserved:.2f} GB | "
+        f"Peak: {peak:.2f} GB"
+    )
