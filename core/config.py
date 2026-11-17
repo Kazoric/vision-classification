@@ -50,6 +50,8 @@ class TrainingConfig:
     epochs: int
     warm_up_epochs: int = 0
     label_smoothing: float = 0.0  # Supervised training only.
+    mixed_precision: bool = True
+    channels_last: bool = False
 
 
 @dataclass
@@ -97,14 +99,13 @@ class SSLMonitorConfig:
 
 @dataclass
 class SSLConfig:
-    method: str = "byol"  # "byol" | "simclr" | ...
+    method: str = "byol"  # "byol" | "simsiam" | ...
     # Method-specific parameters (factory configuration, similar to the backbone).
     #   byol   : {"projection_dim": 256, "hidden_dim": 2048, "tau_base": 0.99}
-    #   simclr : {"projection_dim": 128, "hidden_dim": 2048, "temperature": 0.5}
+    #   simsiam : {"projection_dim": 256, "hidden_dim": 1024}
     params: Dict[str, Any] = field(default_factory=dict)
     augmentation: SSLAugmentationConfig = field(default_factory=SSLAugmentationConfig)
     monitor: SSLMonitorConfig = field(default_factory=SSLMonitorConfig)
-    mixed_precision: bool = True
 
     @classmethod
     def from_dict(cls, d: Dict[str, Any]) -> "SSLConfig":
@@ -113,7 +114,6 @@ class SSLConfig:
             params=d.get("params", {}),
             augmentation=SSLAugmentationConfig(**d.get("augmentation", {})),
             monitor=SSLMonitorConfig(**d.get("monitor", {})),
-            mixed_precision=d.get("mixed_precision", True),
         )
 
 

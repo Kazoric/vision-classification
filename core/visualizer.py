@@ -24,6 +24,19 @@ class Visualizer:
         
         pass
 
+    def _add_experiment_title(self, trainer: Trainer, title: str):
+        """Add experiment information to the plot."""
+        model_name = trainer.model.name
+        run_id = trainer.run_id
+
+        plt.title(title, pad=15)
+        plt.suptitle(
+            f"Model: {model_name} | Run ID: {run_id}",
+            fontsize=10,
+            y=0.98
+        )
+        plt.tight_layout(rect=[0, 0, 1, 0.93])
+
     def plot_metrics(self, trainer: Trainer, run_id: str, save: Optional[bool] = True):
         """
         Plot training and validation loss, as well as each metric separately.
@@ -46,7 +59,7 @@ class Visualizer:
         plt.plot(epochs, trainer.valid_loss, label='Val Loss')
         plt.xlabel('Epoch')
         plt.ylabel('Loss')
-        plt.title('Training and Validation Loss')
+        self._add_experiment_title(trainer,'Training and Validation Loss')
         plt.legend()
         plt.grid(True)
         plt.tight_layout()
@@ -63,7 +76,7 @@ class Visualizer:
         plt.plot(epochs, trainer.lr_history, label='Learning Rate')
         plt.xlabel('Epoch')
         plt.ylabel('Learning Rate')
-        plt.title('Learning Rate History')
+        self._add_experiment_title(trainer,'Learning Rate History')
         plt.legend()
         plt.grid(True)
         plt.tight_layout()
@@ -88,7 +101,7 @@ class Visualizer:
 
             plt.xlabel('Epoch')
             plt.ylabel(metric_name)
-            plt.title(f'Training and Validation {metric_name}')
+            self._add_experiment_title(trainer,f'Training and Validation {metric_name}')
             plt.legend()
             plt.grid(True)
             plt.tight_layout()
@@ -103,7 +116,7 @@ class Visualizer:
         print()
         plt.show()
 
-    def plot_confusion_matrix(self, cm: torch.Tensor, class_names: list, run_id: str, save: Optional[bool] = True):
+    def plot_confusion_matrix(self, cm: torch.Tensor, class_names: list, model_name: str, run_id: str, save: Optional[bool] = True):
         """
         Plot and optionally save the confusion matrix.
         
@@ -119,7 +132,9 @@ class Visualizer:
 
         plt.xlabel('Predicted')
         plt.ylabel('True')
-        plt.title('Confusion Matrix')
+        plt.title('Confusion Matrix', pad=15)
+        plt.suptitle(f"Model: {model_name} | Run ID: {run_id}", fontsize=10, y=0.98)
+        plt.tight_layout(rect=[0, 0, 1, 0.93])
         plt.tight_layout()
 
         if save:

@@ -8,7 +8,7 @@ import torch
 # Core module imports
 from core.config import Config
 from core.checkpoint import CheckpointManager
-from core.utils import set_seed
+from core.utils import set_seed, generate_run_id
 
 # SSL imports
 from models.backbones import build_backbone
@@ -16,6 +16,9 @@ from core.ssl.methods import build_ssl_method
 from core.ssl.evaluation import make_knn_monitor
 from core.ssl.ssl_trainer import SSLTrainer
 from core.ssl.plots import plot_ssl_curves
+from core.ssl.methods import SSL_METHODS
+
+# import core.ssl.methods.fcmae
 
 # Data imports
 from data_loader import get_ssl_dataloaders
@@ -23,12 +26,12 @@ from data_loader import get_ssl_dataloaders
 # ---------------------------------------------------------------
 # Settings
 # ---------------------------------------------------------------
-SMOKE = False                  # True: smoke test (2 SSL epochs on 5,000 images, 3 probe epochs)
+SMOKE = True                  # True: smoke test (2 SSL epochs on 5,000 images, 3 probe epochs)
 SEED = 42
-DATASET = "cifar10"
-IMAGE_SIZE = (32, 32)
+DATASET = "STL10"
+IMAGE_SIZE = (96, 96)
 USE_STATS = True
-BACKBONE = {"name": "resnet18", "stem": "cifar"}
+BACKBONE = {"name": "resnet18", "stem": "small"}
 NUM_CLASSES = 10
 
 SSL_EPOCHS = 2 if SMOKE else 100
@@ -46,12 +49,18 @@ def run_ssl():
         "experiment": {"dataset_name": DATASET, "seed": SEED},
         "data": {"image_size": list(IMAGE_SIZE)},
         "model": {"num_classes": NUM_CLASSES, "backbone": BACKBONE},
-        "training": {"lr": 0.001, "batch_size": 128, "epochs": SSL_EPOCHS, "warm_up_epochs": SSL_WARMUP},
+        "training": {
+            "lr": 0.001, "batch_size": 128, "epochs": SSL_EPOCHS, "warm_up_epochs": SSL_WARMUP,
+            "mixed_precision": True,
+            "channels_last": True
+        },
         "optimizer": {"type": "AdamW", "params": {"weight_decay": 0.0001, "betas": [0.9, 0.999]}},
         "scheduler": {"type": "CosineAnnealingLR", "params": {"T_max": SSL_EPOCHS - SSL_WARMUP}},
         "ssl": {
-            "method": "byol",
-            "params": {"projection_dim": 256, "hidden_dim": 1024, "tau_base": 0.99},
+            "method": "simsiam",
+            # "params": {"projection_dim": 256, "hidden_dim": 1024, "tau_base": 0.99},
+            # "params": {"mask_ratio": 0.6, "decoder_dim": 512, "decoder_depth": 1, "norm_pix_loss": True},
+            "params": {"projection_dim": 256, "hidden_dim": 1024},
             "augmentation": {
                 "crop_scale": [0.2, 1.0],
                 "color_jitter": [0.4, 0.4, 0.2, 0.1],
@@ -61,9 +70,11 @@ def run_ssl():
                 "solarize_probs": [0.0, 0.2],
             },
             "monitor": {"knn_every": 1 if SMOKE else 10, "knn_k": 20, "knn_temperature": 0.1},
-            "mixed_precision": True,
+            # "mixed_precision": True,
+            # "channels_last": True
         },
     })
+
     set_seed(SEED)
     torch.backends.cudnn.benchmark = True
     print(f"\n=== PHASE 1: SSL ({config.ssl.method}, {SSL_EPOCHS} epochs) | device={device} ===")
@@ -77,6 +88,7 @@ def run_ssl():
         use_computed_stats=USE_STATS,
         limit=LIMIT,
         seed=SEED,
+        num_views=SSL_METHODS[config.ssl.method].num_views
     )
     assert class_names is None or config.model.num_classes == len(class_names), \
         f"num_classes={config.model.num_classes}, but the dataset has {len(class_names)} classes"
@@ -88,29 +100,33 @@ def run_ssl():
     print(f"  Backbone   : {backbone_name} ({backbone.feature_dim}-d)")
     print(f"  Parameters : {sum(p.numel() for p in method.parameters() if p.requires_grad):,} trainable")
 
-    run_id = (f"{config.ssl.method}_{backbone_name}_{DATASET}_"
-              f"{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}")
-    run_dir = os.path.join("experiments", run_id)
+    # Set run_id
+    if config.experiment.run_id is None:
+        exp_name = f"{config.ssl.method}_{backbone_name}"
+        run_id = generate_run_id(
+            model_name=exp_name,
+            dataset_name=config.experiment.dataset_name,
+        )
+        config.experiment.run_id = run_id
+
+    run_dir = os.path.join("experiments", config.experiment.run_id)
     os.makedirs(run_dir, exist_ok=True)
 
     mon = config.ssl.monitor
     monitor = make_knn_monitor(knn_train_loader, val_loader, device,
                                config.model.num_classes, mon.knn_k, mon.knn_temperature)
-    trainer = SSLTrainer.from_config(method, config, device, monitor_fn=monitor, run_id=run_id)
-    checkpoint = CheckpointManager(model=method, optimizer=trainer.optimizer, run_id=run_id)
-
-    def on_best(epoch: int, knn_acc: float) -> None:
-        checkpoint.save(epoch, 1 - knn_acc)
-        torch.save(method.backbone.state_dict(), os.path.join(run_dir, "backbone_best.pth"))
-
+    checkpoint = None
     if config.experiment.save_checkpoints:
-        trainer.on_best = on_best
+        checkpoint = CheckpointManager(
+            run_id=config.experiment.run_id,
+            model_name=config.model.backbone['name'],
+        )
+    trainer = SSLTrainer.from_config(method, config, device, monitor_fn=monitor, save_function=checkpoint.save_backbone if checkpoint else None)
 
     start = time.time()
     trainer.train(ssl_loader, epochs=config.training.epochs)
     print(f"Pretraining time: {time.time() - start:.0f} s")
 
-    torch.save(method.backbone.state_dict(), os.path.join(run_dir, "backbone_last.pth"))
     plot_ssl_curves(trainer, config.ssl.params["projection_dim"], os.path.join(run_dir, "ssl_curves.png"))
     final_knn = trainer.knn_history[-1][1]
     trainer.save_hyperparams(extra_results={"final_knn": final_knn})

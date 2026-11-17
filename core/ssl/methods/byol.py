@@ -1,24 +1,14 @@
 import copy
 import itertools
 import math
-from typing import Dict
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from .base import SSLMethod
 from core.ssl.pooling import global_pool
-
-class SSLMethod(nn.Module):
-    """Common interface: self.backbone (network to transfer), forward(v1, v2), after_step."""
-    backbone: nn.Module
-
-    def forward(self, v1: torch.Tensor, v2: torch.Tensor) -> Dict[str, torch.Tensor]:
-        """Returns {"loss": ..., "z": detached embeddings for collapse monitoring}."""
-        raise NotImplementedError
-
-    def after_step(self, progress: float) -> None:
-        """Called after each optimizer.step(); progress is in [0, 1]."""
+from .registry import register_ssl_method
 
 def _mlp(in_dim: int, hidden_dim: int, out_dim: int) -> nn.Sequential:
     return nn.Sequential(nn.Linear(in_dim, hidden_dim), nn.BatchNorm1d(hidden_dim),
@@ -30,7 +20,9 @@ def _byol_loss(p: torch.Tensor, z: torch.Tensor) -> torch.Tensor:
     z = F.normalize(z.float(), dim=-1)
     return (2 - 2 * (p * z).sum(dim=-1)).mean()
 
+@register_ssl_method("byol")
 class BYOL(SSLMethod):
+    num_views = 2
     def __init__(self, backbone, projection_dim: int = 256,
                  hidden_dim: int = 1024, tau_base: float = 0.99):
         super().__init__()
@@ -71,10 +63,3 @@ class BYOL(SSLMethod):
                                  self.target_projector.parameters())
         for o, t in zip(online, target):
             t.mul_(self.tau).add_(o.detach(), alpha=1 - self.tau)
-
-SSL_METHODS = {"byol": BYOL}
-
-def build_ssl_method(name: str, backbone, **params) -> SSLMethod:
-    if name not in SSL_METHODS:
-        raise KeyError(f"Unknown SSL method '{name}'. Available methods: {list(SSL_METHODS)}")
-    return SSL_METHODS[name](backbone, **params)

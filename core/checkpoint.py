@@ -3,174 +3,305 @@ import torch
 import os
 
 class CheckpointManager:
-    """
-    Class for managing model checkpoints.
-    
-    Attributes:
-        model (nn.Module): Model to save and load checkpoints from
-        optimizer (torch.optim.Optimizer): Optimizer to save and load checkpoints from
-        run_id (str): Unique identifier for the current experiment
-        model_name (str): Prefix for naming checkpoint files
-        best_val_loss (float): Best validation loss seen so far
-        start_epoch (int): Starting epoch number for training
-    """
-    
-    def __init__(
-        self, 
-        model: torch.nn.Module, 
-        optimizer: torch.optim.Optimizer, 
-        run_id: str = None, 
-        model_name: str = "model"
-    ) -> None:
-        """
-        Initialize the CheckpointManager object.
-        
-        Args:
-            model (nn.Module): Model to save and load checkpoints from
-            optimizer (torch.optim.Optimizer): Optimizer to save and load checkpoints from
-            run_id (str): Unique identifier for the current experiment
-            model_name (str): Prefix for naming checkpoint files
-        
-        Returns:
-            None
-        """
-        
-        # Set model and optimizer attributes
-        self.model = model
-        self.optimizer = optimizer
-        
-        # Set model name attribute
-        self.model_name = model_name
-        
-        # Initialize best validation loss and start epoch attributes
-        self.best_val_loss = float('inf')
-        self.start_epoch = 0
 
-        # Create checkpoint directory if it doesn't exist
-        checkpoint_dir = f"./experiments/{run_id}/checkpoints"
-        self.checkpoint_dir = checkpoint_dir
+    def __init__(
+        self,
+        run_id: str,
+        model_name: str = "model",
+        checkpoint_dir: str = "./experiments",
+    ):
+        self.run_id = run_id
+        self.model_name = model_name
+
+        self.checkpoint_dir = os.path.join(
+            checkpoint_dir,
+            run_id,
+            "checkpoints"
+        )
 
         os.makedirs(self.checkpoint_dir, exist_ok=True)
 
-    def save(self, epoch: int, value: float, monitor: str = "val_loss") -> None:
-        """
-        Save a checkpoint if the validation loss is the best seen so far.
-        
-        Args:
-            epoch (int): Current epoch number
-            val_loss (float): Validation loss for the current epoch
-        
-        Returns:
-            None
-        """
-        
-        # Create checkpoint dictionary
+    def save(
+        self,
+        model: torch.nn.Module,
+        optimizer: torch.optim.Optimizer = None,
+        scheduler=None,
+        epoch: int = 0,
+        value: float = 0.0,
+        monitor: str = "val_loss",
+    ) -> None:
+
         checkpoint = {
-            'model_state_dict': self.model.state_dict(),
-            'optimizer_state_dict': self.optimizer.state_dict(),
-            'epoch': epoch,
-            'monitor': monitor,
-            'value': value
+            "model_state_dict": model.state_dict(),
+            "optimizer_state_dict": optimizer.state_dict() if optimizer is not None else None,
+            "scheduler_state_dict": scheduler.state_dict() if scheduler is not None else None,
+            "epoch": epoch,
+            "monitor": monitor,
+            "value": value,
         }
 
-        # Create filename and path for saving checkpoint
-        filename = f"{self.model_name}_epoch-{epoch}_{monitor}-{value:.4f}.pt"
+        filename = (
+            f"{self.model_name}_epoch-{epoch}_"
+            f"{monitor}-{value:.4f}.pt"
+        )
+
         path = os.path.join(self.checkpoint_dir, filename)
 
-        # Save checkpoint to file
         torch.save(checkpoint, path)
-        print(f"Checkpoint saved: {path}")
 
-        # Update metadata
-        self.best_val_loss = value
-        self.start_epoch = epoch
+    def save_best(
+        self,
+        model: torch.nn.Module,
+        optimizer: torch.optim.Optimizer = None,
+        scheduler=None,
+        epoch: int = 0,
+        value: float = 0.0,
+        monitor: str = "val_loss",
+    ):
+        checkpoint = {
+            "model_state_dict": model.state_dict(),
+            "optimizer_state_dict": optimizer.state_dict() if optimizer else None,
+            "scheduler_state_dict": scheduler.state_dict() if scheduler else None,
+            "epoch": epoch,
+            "monitor": monitor,
+            "value": value,
+        }
 
-    def load_best(self, monitor: str = "loss", mode: str = 'min', load_optimizer = True) -> bool:
-            """
-            Load the best checkpoint (based on monitor).
-            
-            Returns:
-                bool: Whether a checkpoint was loaded successfully
-            """
-            
-            # Check if checkpoint directory exists
-            if not os.path.exists(self.checkpoint_dir):
-                print("No checkpoint directory found.")
-                return False
+        path = os.path.join(
+            self.checkpoint_dir,
+            "best_model.pt",
+        )
+
+        torch.save(checkpoint, path)
+
+    def save_last(
+        self,
+        model: torch.nn.Module,
+        optimizer: torch.optim.Optimizer = None,
+        scheduler=None,
+        epoch: int = 0,
+        value: float = 0.0,
+        monitor: str = "val_loss",
+    ):
+        checkpoint = {
+            "model_state_dict": model.state_dict(),
+            "optimizer_state_dict": optimizer.state_dict() if optimizer else None,
+            "scheduler_state_dict": scheduler.state_dict() if scheduler else None,
+            "epoch": epoch,
+            "monitor": monitor,
+            "value": value,
+        }
+
+        path = os.path.join(
+            self.checkpoint_dir,
+            "last_model.pt",
+        )
+
+        torch.save(checkpoint, path)
+
+    def save_backbone(self, model: torch.nn.Module, checkpoint_type: str):
     
-            # Get list of checkpoint files in the directory
-            checkpoint_files = [
-                f for f in os.listdir(self.checkpoint_dir) if f.endswith(".pt") and self.model_name in f
-            ]
-            
-            # Check if any checkpoint files exist
-            if not checkpoint_files:
-                print("No checkpoint files found.")
-                return False
-            
-            # Sort checkpoint files by val_loss (extracted from filename)
-            checkpoint_files.sort(key=lambda x: float(x.split(f"{monitor}-")[-1].replace(".pt", "")))
+            path = os.path.join(
+                self.checkpoint_dir,
+                f"backbone_{checkpoint_type}.pt",
+            )
     
-            # Load the best checkpoint
-            if mode == 'min':
-                best_checkpoint = checkpoint_files[0]
-            else:
-                best_checkpoint = checkpoint_files[-1]
-            path = os.path.join(self.checkpoint_dir, best_checkpoint)
-            checkpoint = torch.load(path, map_location=self.model.device)
+            torch.save(model.backbone.state_dict(), path)
+
+    def load(
+        self,
+        path: str,
+        model: torch.nn.Module,
+        optimizer=None,
+        scheduler=None,
+        map_location="cpu",
+        load_optimizer=True,
+    ) -> dict:
+
+        checkpoint = torch.load(path, map_location=map_location, weights_only=True)
+
+        model.load_state_dict(checkpoint["model_state_dict"])
+
+        if load_optimizer and optimizer is not None:
+            if checkpoint["optimizer_state_dict"] is not None:
+                optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+
+        if scheduler is not None:
+            if checkpoint.get("scheduler_state_dict") is not None:
+                scheduler.load_state_dict(checkpoint["scheduler_state_dict"])
+
+        return checkpoint
+
+
+# class CheckpointManager:
+#     """
+#     Class for managing model checkpoints.
     
-            # Load model and optimizer state dictionaries
-            self.model.load_state_dict(checkpoint['model_state_dict'])
-            if load_optimizer:
-                self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+#     Attributes:
+#         model (nn.Module): Model to save and load checkpoints from
+#         optimizer (torch.optim.Optimizer): Optimizer to save and load checkpoints from
+#         run_id (str): Unique identifier for the current experiment
+#         model_name (str): Prefix for naming checkpoint files
+#         best_val_loss (float): Best validation loss seen so far
+#         start_epoch (int): Starting epoch number for training
+#     """
+    
+#     def __init__(
+#         self, 
+#         model: torch.nn.Module, 
+#         optimizer: torch.optim.Optimizer, 
+#         run_id: str = None, 
+#         model_name: str = "model"
+#     ) -> None:
+#         """
+#         Initialize the CheckpointManager object.
+        
+#         Args:
+#             model (nn.Module): Model to save and load checkpoints from
+#             optimizer (torch.optim.Optimizer): Optimizer to save and load checkpoints from
+#             run_id (str): Unique identifier for the current experiment
+#             model_name (str): Prefix for naming checkpoint files
+        
+#         Returns:
+#             None
+#         """
+        
+#         # Set model and optimizer attributes
+#         self.model = model
+#         self.optimizer = optimizer
+        
+#         # Set model name attribute
+#         self.model_name = model_name
+        
+#         # Initialize best validation loss and start epoch attributes
+#         self.best_val_loss = float('inf')
+#         self.start_epoch = 0
+
+#         # Create checkpoint directory if it doesn't exist
+#         checkpoint_dir = f"./experiments/{run_id}/checkpoints"
+#         self.checkpoint_dir = checkpoint_dir
+
+#         os.makedirs(self.checkpoint_dir, exist_ok=True)
+
+#     def save(self, epoch: int, value: float, monitor: str = "val_loss") -> None:
+#         """
+#         Save a checkpoint if the validation loss is the best seen so far.
+        
+#         Args:
+#             epoch (int): Current epoch number
+#             val_loss (float): Validation loss for the current epoch
+        
+#         Returns:
+#             None
+#         """
+        
+#         # Create checkpoint dictionary
+#         checkpoint = {
+#             'model_state_dict': self.model.state_dict(),
+#             'optimizer_state_dict': self.optimizer.state_dict(),
+#             'epoch': epoch,
+#             'monitor': monitor,
+#             'value': value
+#         }
+
+#         # Create filename and path for saving checkpoint
+#         filename = f"{self.model_name}_epoch-{epoch}_{monitor}-{value:.4f}.pt"
+#         path = os.path.join(self.checkpoint_dir, filename)
+
+#         # Save checkpoint to file
+#         torch.save(checkpoint, path)
+#         print(f"Checkpoint saved: {path}")
+
+#         # Update metadata
+#         self.best_val_loss = value
+#         self.start_epoch = epoch
+
+#     def load_best(self, monitor: str = "loss", mode: str = 'min', load_optimizer = True) -> bool:
+#             """
+#             Load the best checkpoint (based on monitor).
             
-            # Update metadata
-            self.start_epoch = checkpoint['epoch']
-            self.monitor = checkpoint['monitor']
-            self.value = checkpoint['value']
+#             Returns:
+#                 bool: Whether a checkpoint was loaded successfully
+#             """
+            
+#             # Check if checkpoint directory exists
+#             if not os.path.exists(self.checkpoint_dir):
+#                 print("No checkpoint directory found.")
+#                 return False
     
-            print(f"Loaded checkpoint: {best_checkpoint} (epoch {self.start_epoch}, {self.monitor} {self.value:.4f})")
-            return True
+#             # Get list of checkpoint files in the directory
+#             checkpoint_files = [
+#                 f for f in os.listdir(self.checkpoint_dir) if f.endswith(".pt") and self.model_name in f
+#             ]
+            
+#             # Check if any checkpoint files exist
+#             if not checkpoint_files:
+#                 print("No checkpoint files found.")
+#                 return False
+            
+#             # Sort checkpoint files by val_loss (extracted from filename)
+#             checkpoint_files.sort(key=lambda x: float(x.split(f"{monitor}-")[-1].replace(".pt", "")))
+    
+#             # Load the best checkpoint
+#             if mode == 'min':
+#                 best_checkpoint = checkpoint_files[0]
+#             else:
+#                 best_checkpoint = checkpoint_files[-1]
+#             path = os.path.join(self.checkpoint_dir, best_checkpoint)
+#             checkpoint = torch.load(path, map_location=self.model.device)
+    
+#             # Load model and optimizer state dictionaries
+#             self.model.load_state_dict(checkpoint['model_state_dict'])
+#             if load_optimizer:
+#                 self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+            
+#             # Update metadata
+#             self.start_epoch = checkpoint['epoch']
+#             self.monitor = checkpoint['monitor']
+#             self.value = checkpoint['value']
+    
+#             print(f"Loaded checkpoint: {best_checkpoint} (epoch {self.start_epoch}, {self.monitor} {self.value:.4f})")
+#             return True
 
-    def load_latest(self, load_optimizer = True) -> bool:
-        """
-        Load the latest checkpoint (based on val_loss minimum).
+#     def load_latest(self, load_optimizer = True) -> bool:
+#         """
+#         Load the latest checkpoint (based on val_loss minimum).
         
-        Returns:
-            bool: Whether a checkpoint was loaded successfully
-        """
+#         Returns:
+#             bool: Whether a checkpoint was loaded successfully
+#         """
         
-        # Check if checkpoint directory exists
-        if not os.path.exists(self.checkpoint_dir):
-            print("No checkpoint directory found.")
-            return False
+#         # Check if checkpoint directory exists
+#         if not os.path.exists(self.checkpoint_dir):
+#             print("No checkpoint directory found.")
+#             return False
 
-        # Get list of checkpoint files in the directory
-        checkpoint_files = [
-            f for f in os.listdir(self.checkpoint_dir) if f.endswith(".pt") and self.model_name in f
-        ]
+#         # Get list of checkpoint files in the directory
+#         checkpoint_files = [
+#             f for f in os.listdir(self.checkpoint_dir) if f.endswith(".pt") and self.model_name in f
+#         ]
         
-        # Check if any checkpoint files exist
-        if not checkpoint_files:
-            print("No checkpoint files found.")
-            return False
+#         # Check if any checkpoint files exist
+#         if not checkpoint_files:
+#             print("No checkpoint files found.")
+#             return False
         
-        # Sort checkpoint files by val_loss (extracted from filename)
-        checkpoint_files.sort(key=lambda x: float(x.split("loss-")[-1].replace(".pt", "")))
+#         # Sort checkpoint files by val_loss (extracted from filename)
+#         checkpoint_files.sort(key=lambda x: float(x.split("loss-")[-1].replace(".pt", "")))
 
-        # Load the best checkpoint
-        best_checkpoint = checkpoint_files[-1]
-        path = os.path.join(self.checkpoint_dir, best_checkpoint)
-        checkpoint = torch.load(path, map_location=self.model.device)
+#         # Load the best checkpoint
+#         best_checkpoint = checkpoint_files[-1]
+#         path = os.path.join(self.checkpoint_dir, best_checkpoint)
+#         checkpoint = torch.load(path, map_location=self.model.device)
 
-        # Load model and optimizer state dictionaries
-        self.model.load_state_dict(checkpoint['model_state_dict'])
-        if load_optimizer:
-            self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+#         # Load model and optimizer state dictionaries
+#         self.model.load_state_dict(checkpoint['model_state_dict'])
+#         if load_optimizer:
+#             self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
         
-        # Update metadata
-        self.start_epoch = checkpoint['epoch']
-        self.best_val_loss = checkpoint['val_loss']
+#         # Update metadata
+#         self.start_epoch = checkpoint['epoch']
+#         self.best_val_loss = checkpoint['val_loss']
 
-        print(f"Loaded checkpoint: {best_checkpoint} (epoch {self.start_epoch}, val_loss {self.best_val_loss:.4f})")
-        return True
+#         print(f"Loaded checkpoint: {best_checkpoint} (epoch {self.start_epoch}, val_loss {self.best_val_loss:.4f})")
+#         return True

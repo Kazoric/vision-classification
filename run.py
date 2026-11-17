@@ -11,36 +11,59 @@ from core.checkpoint import CheckpointManager
 from core.visualizer import Visualizer
 from core.model_base import Model
 from core.metrics import confusion_matrix_torch
+from core.utils import generate_run_id, set_seed
 
 # Data and Model imports
 from data_loader import get_torchvision_dataset
+
+backbone_path = R"experiments\simsiam_resnet18_STL10_2026-11-16_18-12-35\checkpoints\backbone_last.pt"
 yaml_config = {
-    "experiment": {"dataset_name": "cifar10"},
+    "experiment": {
+        "dataset_name": "stl10",
+        "save_checkpoints": False,
+        "seed": 42
+    },
     "data": {
-        "image_size": [32, 32],
+        "image_size": [96, 96],
     },
     "model": {
         "num_classes": 10,
-        "backbone": {"name": "resnet18", "stem": "cifar"},
+        "backbone": {"name": "resnet18", "stem": "small"},
+        "pretrained_backbone": backbone_path,
+        "freeze_backbone": False
     },
-    "training": {"lr": 0.01, "batch_size": 256, "epochs": 10, "warm_up_epochs": 0, "label_smoothing": 0.1},
+    "training": {
+        "lr": 0.01, "batch_size": 256, "epochs": 30, "warm_up_epochs": 0, "label_smoothing": 0.1,
+        "mixed_precision": True,
+        "channels_last": True
+    },
     "optimizer": {"type": "AdamW", "params": {"weight_decay": 0.0001, "betas": [0.9, 0.999]}},
-    "scheduler": {"type": "CosineAnnealingLR", "params": {"T_max": 10}},   # epochs - warm_up
+    "scheduler": {"type": "CosineAnnealingLR", "params": {"T_max": 30}},   # epochs - warm_up
     'metrics': {
-        'monitor_metric': 'Top_1_Accuracy',
+        'monitor_metric': 'top_1_accuracy',
         'monitor_mode': 'max',
         'metric_functions': {
-            'Top_1_Accuracy': ['topk_accuracy_torch', {'k': 1}],
-            'Top-5 Accuracy': ['topk_accuracy_torch', {'k': 5}],
-            'Precision': ['precision_score_torch', {'num_classes': 10}],
-            'Recall': ['recall_score_torch', {'num_classes': 10}],
-            'F1': ['f1_score_torch', {'num_classes': 10}]
+            'top_1_accuracy': ['topk_accuracy_torch', {'k': 1}],
+            'top_5_accuracy': ['topk_accuracy_torch', {'k': 5}],
+            'precision': ['precision_score_torch', {'num_classes': 10}],
+            'recall': ['recall_score_torch', {'num_classes': 10}],
+            'f1': ['f1_score_torch', {'num_classes': 10}]
         }
     }
 }
 
 if __name__ == "__main__":
     config = Config.from_dict(yaml_config)
+
+    # Set run_id
+    if config.experiment.run_id is None:
+        run_id = generate_run_id(
+            model_name=config.model.backbone['name'],
+            dataset_name=config.experiment.dataset_name,
+        )
+        config.experiment.run_id = run_id
+
+    set_seed(config.experiment.seed)
 
     # Determine the computation device (CUDA if available, otherwise CPU).
     device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -62,26 +85,26 @@ if __name__ == "__main__":
     # Log model specifics like name and total parameters.
     print(f"  Model        : {model.name}")
     print(f"  Parameters    : {sum(p.numel() for p in model.parameters()):,}")
+
+    # Setup the CheckpointManager to save and load training state.
+    checkpoint = None
+    if config.experiment.save_checkpoints:
+        checkpoint = CheckpointManager(
+            run_id=config.experiment.run_id,
+            model_name=config.model.backbone['name'],
+        )
+    
     trainer = Trainer.from_config(
         model=model,
         config=config,
         device=device,
         metrics_config=config.metrics if config.metrics.metric_functions else None,
+        on_best_model=checkpoint.save_best if checkpoint else None,
+        on_epoch_end=checkpoint.save_last if checkpoint else None,
     )
-
-    # Setup the CheckpointManager to save and load training state.
-    checkpoint = CheckpointManager(
-        model=model,
-        optimizer=trainer.optimizer,
-        run_id=trainer.run_id,
-    )
-
-    # Configure the trainer to save the best model checkpoint.
-    if config.experiment.save_checkpoints:
-        trainer.on_best_model = checkpoint.save
 
     # Log the unique run identifier.
-    print(f"  Run ID        : {trainer.run_id}")
+    print(f"  Run ID        : {run_id}")
 
     # Initialize the Predictor and Visualizer components.
     predictor = Predictor(model=model, device=device)
@@ -102,6 +125,6 @@ if __name__ == "__main__":
     print(f"Training took {end_time:.2f} seconds\n")
     y, logits = trainer.collect_predictions(val_loader)
     cm = confusion_matrix_torch(y, logits, config.model.num_classes)
-    visualizer.plot_confusion_matrix(cm, train_loader.dataset.classes, run_id=model.run_id)
+    visualizer.plot_confusion_matrix(cm, train_loader.dataset.classes, model_name=model.name, run_id=model.run_id)
     visualizer.plot_metrics(trainer, model.run_id)
     trainer.save_hyperparams()
