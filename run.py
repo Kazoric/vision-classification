@@ -16,31 +16,38 @@ from core.utils import generate_run_id, set_seed
 # Data and Model imports
 from data_loader import get_torchvision_dataset
 
+backbone_path = R"experiments\simsiam_resnet18_STL10_2026-11-16_18-12-35\checkpoints\backbone_last.pt"
 yaml_config = {
     "experiment": {
-        "dataset_name": "cifar10",
+        "dataset_name": "stl10",
         "save_checkpoints": False,
         "seed": 42
     },
     "data": {
-        "image_size": [32, 32],
+        "image_size": [96, 96],
     },
     "model": {
         "num_classes": 10,
-        "backbone": {"name": "resnet18", "stem": "cifar"},
+        "backbone": {"name": "resnet18", "stem": "small"},
+        "pretrained_backbone": backbone_path,
+        "freeze_backbone": False
     },
-    "training": {"lr": 0.01, "batch_size": 256, "epochs": 5, "warm_up_epochs": 0, "label_smoothing": 0.1},
+    "training": {
+        "lr": 0.01, "batch_size": 256, "epochs": 30, "warm_up_epochs": 0, "label_smoothing": 0.1,
+        "mixed_precision": True,
+        "channels_last": True
+    },
     "optimizer": {"type": "AdamW", "params": {"weight_decay": 0.0001, "betas": [0.9, 0.999]}},
-    "scheduler": {"type": "CosineAnnealingLR", "params": {"T_max": 10}},   # epochs - warm_up
+    "scheduler": {"type": "CosineAnnealingLR", "params": {"T_max": 30}},   # epochs - warm_up
     'metrics': {
-        'monitor_metric': 'Top_1_Accuracy',
+        'monitor_metric': 'top_1_accuracy',
         'monitor_mode': 'max',
         'metric_functions': {
-            'Top_1_Accuracy': ['topk_accuracy_torch', {'k': 1}],
-            'Top-5 Accuracy': ['topk_accuracy_torch', {'k': 5}],
-            'Precision': ['precision_score_torch', {'num_classes': 10}],
-            'Recall': ['recall_score_torch', {'num_classes': 10}],
-            'F1': ['f1_score_torch', {'num_classes': 10}]
+            'top_1_accuracy': ['topk_accuracy_torch', {'k': 1}],
+            'top_5_accuracy': ['topk_accuracy_torch', {'k': 5}],
+            'precision': ['precision_score_torch', {'num_classes': 10}],
+            'recall': ['recall_score_torch', {'num_classes': 10}],
+            'f1': ['f1_score_torch', {'num_classes': 10}]
         }
     }
 }

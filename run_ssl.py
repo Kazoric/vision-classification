@@ -49,7 +49,11 @@ def run_ssl():
         "experiment": {"dataset_name": DATASET, "seed": SEED},
         "data": {"image_size": list(IMAGE_SIZE)},
         "model": {"num_classes": NUM_CLASSES, "backbone": BACKBONE},
-        "training": {"lr": 0.001, "batch_size": 128, "epochs": SSL_EPOCHS, "warm_up_epochs": SSL_WARMUP},
+        "training": {
+            "lr": 0.001, "batch_size": 128, "epochs": SSL_EPOCHS, "warm_up_epochs": SSL_WARMUP,
+            "mixed_precision": True,
+            "channels_last": True
+        },
         "optimizer": {"type": "AdamW", "params": {"weight_decay": 0.0001, "betas": [0.9, 0.999]}},
         "scheduler": {"type": "CosineAnnealingLR", "params": {"T_max": SSL_EPOCHS - SSL_WARMUP}},
         "ssl": {
@@ -66,8 +70,8 @@ def run_ssl():
                 "solarize_probs": [0.0, 0.2],
             },
             "monitor": {"knn_every": 1 if SMOKE else 10, "knn_k": 20, "knn_temperature": 0.1},
-            "mixed_precision": True,
-            "channels_last": True
+            # "mixed_precision": True,
+            # "channels_last": True
         },
     })
 

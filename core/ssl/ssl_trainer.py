@@ -20,14 +20,14 @@ class SSLTrainer:
                  scheduler: Optional[LRScheduler] = None,
                  monitor_fn: Optional[Callable] = None, monitor_every: int = 1,
                  save_function: Optional[Callable[[nn.Module, str], None]] = None,
-                 amp: bool = True, 
+                 mixed_precision: bool = True, 
                  channels_last: bool = False,
                  config: Optional[Any] = None,
                  run_id: Optional[str] = None):
         self.method = method.to(device)
         self.optimizer, self.device, self.scheduler = optimizer, device, scheduler
         self.monitor_fn, self.monitor_every = monitor_fn, monitor_every
-        self.amp, self.config = amp, config
+        self.mixed_precision, self.config = mixed_precision, config
         self.save_function = save_function
         self.device_type = "cuda" if "cuda" in str(device) else "cpu"
         self.run_id = run_id or f"ssl_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
@@ -51,14 +51,14 @@ class SSLTrainer:
         save_function: Optional[Callable[[nn.Module, str], None]] = None,
     ):
         device = device or ("cuda" if torch.cuda.is_available() else "cpu")
-        mf = torch.channels_last if config.ssl.channels_last else torch.contiguous_format
+        mf = torch.channels_last if config.training.channels_last else torch.contiguous_format
         method = method.to(device, memory_format=mf)
         optimizer = build_optimizer(method.parameters(), config)  # Ignore the target (requires_grad=False).
         scheduler = build_scheduler(optimizer, config)
         return cls(method, optimizer, device, scheduler, monitor_fn,
                    monitor_every=config.ssl.monitor.knn_every, save_function=save_function,
-                   amp=config.ssl.mixed_precision, config=config, run_id=config.experiment.run_id,
-                   channels_last=config.ssl.channels_last)
+                   mixed_precision=config.training.mixed_precision, config=config, run_id=config.experiment.run_id,
+                   channels_last=config.training.channels_last)
 
     def _run_monitor(self, epoch: int, method: nn.Module) -> None:
         acc = self.monitor_fn(self.method)
@@ -92,7 +92,7 @@ class SSLTrainer:
                 self.optimizer.zero_grad(set_to_none=True)
                 # memory_stats("Before forward")
                 with torch.autocast(device_type=self.device_type, dtype=torch.bfloat16,
-                                    enabled=self.amp):
+                                    enabled=self.mixed_precision):
                     out = self.method(*views)
                 # memory_stats("After forward")
                 out["loss"].backward()

@@ -33,7 +33,8 @@ class Trainer:
         on_epoch_end: Optional[Callable[[nn.Module, torch.optim.Optimizer, int, float, str], None]] = None,
         config: Optional[Any] = None,
         run_id: Optional[str] = None,
-        amp: bool = False,
+        mixed_precision: bool = True,
+        channels_last: bool = False
     ) -> None:
         self.model = model.to(device)
         self.optimizer = optimizer
@@ -43,7 +44,8 @@ class Trainer:
         self.on_best_model = on_best_model
         self.on_epoch_end = on_epoch_end
         self.config = config
-        self.amp = amp
+        self.mixed_precision = mixed_precision
+        self.channels_last = channels_last
         self.device_type = "cuda" if "cuda" in str(device) else "cpu"
 
         # --- Run ID ---
@@ -75,6 +77,10 @@ class Trainer:
         self.best_monitor_value = float("-inf") if self.monitor_mode == "max" else float("inf")
         self.best_epoch: dict = {}
 
+        self.memory_format = torch.channels_last if channels_last else torch.contiguous_format
+        if "cuda" in str(device):
+            torch.backends.cudnn.benchmark = True
+
     # ------------------------------------------------------------------
     # Initialization
     # ------------------------------------------------------------------
@@ -90,7 +96,8 @@ class Trainer:
         metrics_config: Optional[Any] = None,
     ) -> "Trainer":
         device = device or ("cuda" if torch.cuda.is_available() else "cpu")
-        model = model.to(device)
+        mf = torch.channels_last if config.training.channels_last else torch.contiguous_format
+        model = model.to(device, memory_format=mf)
 
         # The backbone is already frozen for linear probing in Model.__init__:
         # build_optimizer therefore receives only trainable parameters.
@@ -109,7 +116,8 @@ class Trainer:
             on_epoch_end=on_epoch_end,
             config=config,
             run_id=getattr(config.experiment, "run_id", None),
-            amp=getattr(config.training, "amp", False),
+            mixed_precision=getattr(config.training, "mixed_precision", False),
+            channels_last=getattr(config.training, "channels_last", False),
         )
 
     @staticmethod
@@ -137,7 +145,7 @@ class Trainer:
     # ------------------------------------------------------------------
 
     def _autocast(self):
-        return torch.autocast(device_type=self.device_type, dtype=torch.bfloat16, enabled=self.amp)
+        return torch.autocast(device_type=self.device_type, dtype=torch.bfloat16, enabled=self.mixed_precision)
 
     def train(
         self,
@@ -155,7 +163,7 @@ class Trainer:
 
             pbar = tqdm(train_loader, desc=f"Epoch {epoch + 1}/{epochs}")
             for images, labels in pbar:
-                images = images.to(self.device, non_blocking=True)
+                images = images.to(self.device, memory_format=self.memory_format, non_blocking=True)
                 labels = labels.to(self.device, non_blocking=True)
 
                 self.optimizer.zero_grad(set_to_none=True)
